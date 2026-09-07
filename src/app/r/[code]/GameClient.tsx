@@ -35,7 +35,7 @@ function prompt(view: GameView): { title: string; hint: string } {
       }
       if (view.turnStep === 'holding') {
         return view.heldFrom === 'draw'
-          ? { title: 'Garde-la ou jette-la', hint: 'Tape une de tes cartes pour l’échanger.' }
+          ? { title: 'Échange-la, ou jette-la', hint: 'Tape une de tes cartes — ou la défausse pour t’en débarrasser.' }
           : { title: 'Place la carte', hint: 'Tape la carte que tu veux remplacer.' };
       }
       return { title: 'Retourne une carte', hint: 'Tu as jeté la pioche : il faut en découvrir une.' };
@@ -138,11 +138,10 @@ export function GameClient({ code }: { code: string }) {
         <Link href="/" className="text-sm text-ink-faint" aria-label="Quitter">
           ←
         </Link>
-        <div className="text-center">
-          <div className="text-[0.65rem] uppercase tracking-[0.18em] text-ink-faint">
-            {view.phase === 'lobby' ? 'salon' : `manche ${view.round}`} · objectif {view.targetScore}
-          </div>
-          <div className="font-mono text-sm font-bold tracking-[0.25em] text-accent">{view.code}</div>
+        {/* Le code n'a plus rien à faire ici une fois tout le monde entré : il
+            vit dans le salon, puis dans le menu ⚙ pour le retardataire. */}
+        <div className="text-[0.65rem] uppercase tracking-[0.18em] text-ink-faint">
+          {view.phase === 'lobby' ? 'salon' : `manche ${view.round}`} · objectif {view.targetScore}
         </div>
         <button
           type="button"
@@ -156,6 +155,7 @@ export function GameClient({ code }: { code: string }) {
 
       {showSettings && (
         <SettingsSheet
+          code={view.code}
           muted={muted}
           live={live}
           onToggleMute={() => {
@@ -254,6 +254,24 @@ export function GameClient({ code }: { code: string }) {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * Partage le lien de la partie. Renvoie `true` quand il a fallu se rabattre sur
+ * le presse-papiers, pour que l'appelant puisse le dire à l'écran.
+ */
+async function shareGame(code: string): Promise<boolean> {
+  const url = `${window.location.origin}/r/${code}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Skyskouiki', text: `Rejoins ma partie : ${code}`, url });
+      return false;
+    }
+    await navigator.clipboard.writeText(url);
+    return true;
+  } catch {
+    return false; // partage annulé
+  }
+}
+
 function Centered({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid h-dvh place-items-center px-8 text-center text-sm text-ink-dim">
@@ -324,25 +342,16 @@ function Lobby({ view, onStart, busy }: { view: GameView; onStart: () => void; b
   const [copied, setCopied] = useState(false);
 
   const share = async () => {
-    const url = `${window.location.origin}/r/${view.code}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Skyskouiki', text: `Rejoins ma partie : ${view.code}`, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // partage annulé
-    }
+    if (!(await shareGame(view.code))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
   };
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6">
       <div className="text-center">
         <p className="text-xs uppercase tracking-[0.2em] text-ink-faint">code de la partie</p>
-        <p className="mt-1 font-mono text-5xl font-black tracking-[0.28em] text-accent">
+        <p className="tnum mt-1 text-5xl font-black tracking-[0.24em] text-accent">
           {view.code}
         </p>
       </div>
@@ -401,11 +410,13 @@ function Lobby({ view, onStart, busy }: { view: GameView; onStart: () => void; b
 }
 
 function SettingsSheet({
+  code,
   muted,
   live,
   onToggleMute,
   onClose,
 }: {
+  code: string;
   muted: boolean;
   live: boolean;
   onToggleMute: () => void;
@@ -414,9 +425,19 @@ function SettingsSheet({
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-end p-4" onClick={onClose}>
       <div
-        className="mt-14 w-52 rounded-2xl border border-white/12 bg-felt-800/95 p-2 shadow-2xl backdrop-blur-md"
+        className="mt-14 w-56 rounded-2xl border border-white/12 bg-felt-800/95 p-2 shadow-2xl backdrop-blur-md"
         onClick={(event) => event.stopPropagation()}
       >
+        {/* Sorti de l'écran de jeu, le code reste à un tap : c'est là qu'on le
+            cherche quand quelqu'un arrive en retard. */}
+        <button
+          type="button"
+          onClick={() => void shareGame(code)}
+          className="mb-1 flex w-full items-center justify-between rounded-xl bg-white/[0.06] px-3 py-2.5 text-sm active:bg-white/10"
+        >
+          <span className="text-ink-dim">Code</span>
+          <span className="tnum font-bold tracking-[0.2em] text-accent">{code}</span>
+        </button>
         <button
           type="button"
           onClick={onToggleMute}

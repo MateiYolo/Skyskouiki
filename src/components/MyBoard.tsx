@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar } from './PlayerPanel';
+import { Avatar, ScoreTiles } from './PlayerPanel';
 import { PlayerGrid, type CellCue } from './PlayerGrid';
 import { placementHint } from '@/lib/skyjo';
 import type { GameView, ViewPlayer } from '@/lib/skyjo';
@@ -42,27 +42,32 @@ export function MyBoard({ view, me, myTurn, isTarget, onCell }: MyBoardProps) {
     };
   };
 
+  const flag =
+    view.roundCloserId === view.you.id
+      ? 'tu as fermé'
+      : view.finalTurnsLeft !== null
+        ? 'dernier tour'
+        : null;
+
   return (
     <div className="board-cap mx-auto flex min-h-0 w-full max-w-[26rem] flex-[5] flex-col px-3 pt-1">
+      {/* Mon nom sert de repère, mes deux scores sont l'information : le compte
+          des dos, lui, se lit sur la grille juste en dessous. */}
       <div className="mb-1.5 flex shrink-0 items-center gap-2">
         <Avatar player={me} active={myTurn} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[0.8rem] font-semibold leading-tight">{me.name}</div>
-          <div className="tnum text-[0.65rem] leading-tight text-ink-dim">
-            {me.totalScore} pts · visible {me.visibleSum}
-            {me.faceDownCount > 0 && ` · ${me.faceDownCount} cachées`}
-          </div>
+          {flag && (
+            <div
+              className={`text-[0.6rem] font-bold leading-tight ${
+                flag === 'tu as fermé' ? 'text-danger' : 'text-accent'
+              }`}
+            >
+              {flag}
+            </div>
+          )}
         </div>
-        {view.roundCloserId === view.you.id && (
-          <span className="rounded-full bg-danger/20 px-2 py-0.5 text-[0.6rem] font-bold text-danger">
-            tu as fermé
-          </span>
-        )}
-        {view.finalTurnsLeft !== null && view.roundCloserId !== view.you.id && (
-          <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[0.6rem] font-bold text-accent">
-            dernier tour
-          </span>
-        )}
+        <ScoreTiles round={me.visibleSum} total={me.totalScore} target={view.targetScore} />
       </div>
 
       <div className="fit-box min-h-0 flex-1">

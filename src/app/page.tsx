@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { PlayingCard } from '@/components/PlayingCard';
+import { CODE_LENGTH, cleanCode } from '@/lib/code';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
 import { cue, initAudio } from '@/lib/client/feedback';
 
@@ -79,10 +80,9 @@ export default function Home() {
     initAudio();
     cue('tap');
     const finalName = saveProfile();
-    const cleaned = code.trim().toUpperCase();
     if (!finalName) return setError('Il me faut un prénom.');
-    if (cleaned.length < 4) return setError('Le code fait 4 caractères.');
-    router.push(`/r/${cleaned}`);
+    if (code.length < CODE_LENGTH) return setError(`Le code fait ${CODE_LENGTH} chiffres.`);
+    router.push(`/r/${code}`);
   };
 
   if (!ready) return <div className="grid h-dvh place-items-center text-ink-faint">…</div>;
@@ -142,15 +142,17 @@ export default function Home() {
           </div>
         ) : (
           <div className="space-y-2.5">
+            {/* `inputMode="numeric"` : le pavé de chiffres s'ouvre directement,
+                et il n'y a plus rien à épeler ni à confondre avec un zéro. */}
             <input
               value={code}
-              onChange={(event) => setCode(event.target.value.toUpperCase().slice(0, 4))}
-              placeholder="ABCD"
-              inputMode="text"
-              autoCapitalize="characters"
+              onChange={(event) => setCode(cleanCode(event.target.value))}
+              placeholder="1234"
+              inputMode="numeric"
+              autoComplete="one-time-code"
               autoCorrect="off"
-              maxLength={4}
-              className="w-full rounded-2xl border border-white/12 bg-white/5 px-4 py-4 text-center font-mono text-3xl font-black tracking-[0.3em] outline-none placeholder:text-ink-faint focus:border-accent/60"
+              maxLength={CODE_LENGTH}
+              className="tnum w-full rounded-2xl border border-white/12 bg-white/5 px-4 py-4 text-center text-3xl font-black tracking-[0.22em] outline-none placeholder:text-ink-faint focus:border-accent/60"
             />
             <button
               type="button"

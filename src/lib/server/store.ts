@@ -1,5 +1,6 @@
 import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { CODE_LENGTH } from '@/lib/code';
 import { applyAction, createGame, toView, type Action, type GameState, type GameView } from '@/lib/skyjo';
 
 /**
@@ -13,8 +14,9 @@ import { applyAction, createGame, toView, type Action, type GameState, type Game
  *     configuration doit être une erreur bruyante et non une partie fantôme.
  */
 
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // ni O/0 ni I/1
-const CODE_LENGTH = 4;
+/** Dix mille codes possibles, et les parties dorment moins de quinze jours :
+ *  la boucle de `createRoom` absorbe les rares collisions. */
+const CODE_ALPHABET = '0123456789';
 const MAX_COMMIT_RETRIES = 6;
 
 export class GameError extends Error {
@@ -31,8 +33,13 @@ function randomCode(): string {
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
+/**
+ * Tolérant à la saisie : on colle un code espacé (« 482 907 »), tiret compris,
+ * il arrive ici propre. La mise en majuscules ne sert plus qu'aux parties
+ * créées avant le passage au tout-numérique, dont les codes vivent encore.
+ */
 export function normalizeCode(code: string): string {
-  return code.trim().toUpperCase();
+  return code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 }
 
 // ---------------------------------------------------------------------------

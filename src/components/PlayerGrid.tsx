@@ -29,7 +29,7 @@ export interface PlayerGridProps {
 function DeltaBadge({ delta, combo }: { delta: number | null | undefined; combo?: boolean }) {
   if (combo) {
     return (
-      <span className="pointer-events-none absolute -right-1 -top-1 z-10 rounded-full bg-accent px-1.5 py-px text-[0.6rem] font-black leading-tight text-felt-900 shadow-lg">
+      <span className="pointer-events-none absolute right-0.5 top-0.5 z-10 rounded-full bg-accent px-1.5 py-px text-[0.6rem] font-black leading-tight text-felt-900 shadow-lg">
         ✦
       </span>
     );
@@ -41,7 +41,10 @@ function DeltaBadge({ delta, combo }: { delta: number | null | undefined; combo?
   return (
     <span
       className={[
-        'pointer-events-none tnum absolute -right-1 -top-1 z-10 rounded-full px-1.5 py-px text-[0.6rem] font-bold leading-tight shadow-lg',
+        // À l'intérieur de la carte, pas en débord : deux cases voisines ont la
+        // même profondeur, et une pastille qui dépassait passait sous la carte
+        // suivante — pile pendant l'échange, quand on la lit le plus.
+        'pointer-events-none tnum absolute right-0.5 top-0.5 z-10 rounded-full px-1.5 py-px text-[0.6rem] font-bold leading-tight shadow-lg',
         // Un échange à somme nulle n'est ni une bonne ni une mauvaise idée :
         // le peindre en rouge découragerait un coup parfaitement neutre.
         delta < 0 ? 'bg-good text-felt-900' : delta === 0 ? 'bg-white/30 text-ink' : 'bg-danger text-white',
