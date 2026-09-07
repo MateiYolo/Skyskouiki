@@ -1,118 +1,139 @@
 'use client';
 
-import { AnimatePresence, motion } from 'motion/react';
-import { useState } from 'react';
+import { motion } from 'motion/react';
 import { Avatar, ScoreMeter } from './PlayerPanel';
 import { PlayerGrid } from './PlayerGrid';
-import type { GameView, ViewPlayer } from '@/lib/skyjo';
+import type { GameView, LastMove, ViewPlayer } from '@/lib/skyjo';
 
 /**
- * Les adversaires, en bandeau.
+ * Les adversaires, en haut de l'écran.
  *
- * Ils tenaient la moitié de l'écran en vignettes détaillées, pendant que le
- * joueur ne voyait plus sa propre grille. Ici ils tiennent une ligne : de quoi
- * suivre qui joue et qui approche du seuil, sans plus. Le détail est à un
- * doigt — on ouvre la grille d'un adversaire quand on veut vraiment la lire,
- * ce qui est de toute façon un geste délibéré, pas un coup d'œil permanent.
+ * Leur grille est une information stratégique : savoir qui approche du seuil et
+ * qui a encore huit cartes cachées décide de quand on ferme. Elle doit donc se
+ * lire, pas se deviner.
+ *
+ * La hauteur ne se prend pourtant pas sur la grille du joueur : celle-ci est un
+ * carré bridé par la largeur de l'écran (`board-cap`), et sur un téléphone haut
+ * elle laisse cent bons pixels inutilisés. C'est ce reste qui finance les
+ * grilles adverses. À huit joueurs, la bande défile.
  */
 
 interface Props {
   view: GameView;
   opponents: ViewPlayer[];
+  move: LastMove | null;
+  onOpen: (playerId: string) => void;
 }
 
-export function OpponentStrip({ view, opponents }: Props) {
-  const [openId, setOpenId] = useState<string | null>(null);
-  // Résolu à chaque rendu : un adversaire qui quitte la partie referme sa fiche
-  // sans qu'un effet ait à courir après l'état.
-  const open = opponents.find((p) => p.id === openId) ?? null;
+export function OpponentStrip({ view, opponents, move, onOpen }: Props) {
+  // À deux — le cas de loin le plus fréquent — l'unique adversaire s'étale en
+  // largeur : ses infos passent à gauche et toute la hauteur du panneau revient
+  // à sa grille. À plusieurs, chacun reprend une colonne et la bande défile.
+  const solo = opponents.length === 1;
 
   return (
-    <>
-      <div
-        className={[
-          'no-scrollbar flex shrink-0 gap-2 overflow-x-auto px-3 pb-1.5',
-          opponents.length <= 2 ? 'justify-center' : 'fade-right',
-        ].join(' ')}
-      >
-        {opponents.map((player) => (
-          <OpponentChip
-            key={player.id}
-            player={player}
-            active={player.id === view.currentPlayerId}
-            closer={player.id === view.roundCloserId}
-            target={view.targetScore}
-            onOpen={() => setOpenId(player.id)}
-          />
-        ))}
-      </div>
-
-      <AnimatePresence>
-        {open && (
-          <OpponentSheet
-            player={open}
-            active={open.id === view.currentPlayerId}
-            closer={open.id === view.roundCloserId}
-            target={view.targetScore}
-            onClose={() => setOpenId(null)}
-          />
-        )}
-      </AnimatePresence>
-    </>
+    <div
+      className={[
+        'no-scrollbar flex min-h-0 max-h-[13rem] flex-[2] gap-2 overflow-x-auto px-3 pb-1',
+        opponents.length > 3 ? 'fade-right' : 'justify-center',
+      ].join(' ')}
+    >
+      {opponents.map((player) => (
+        <OpponentPanel
+          key={player.id}
+          player={player}
+          solo={solo}
+          active={player.id === view.currentPlayerId}
+          closer={player.id === view.roundCloserId}
+          target={view.targetScore}
+          move={move?.playerId === player.id ? move.text : null}
+          onOpen={() => onOpen(player.id)}
+        />
+      ))}
+    </div>
   );
 }
 
-function OpponentChip({
-  player,
-  active,
-  closer,
-  target,
-  onOpen,
-}: {
+interface PanelProps {
   player: ViewPlayer;
+  solo: boolean;
   active: boolean;
   closer: boolean;
   target: number;
+  move: string | null;
   onOpen: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`Voir la grille de ${player.name}, ${player.totalScore} points`}
-      className={[
-        'flex w-[9.5rem] shrink-0 items-center gap-2 rounded-2xl border px-2 py-1.5 text-left transition-colors active:scale-[0.98]',
-        active ? 'border-accent/60 bg-accent/10' : 'border-white/10 bg-white/[0.04]',
-      ].join(' ')}
-    >
-      <Avatar player={player} active={active} size="sm" />
+}
 
-      <div className="min-w-0 flex-1">
-        {/* Le nom garde la ligne pour lui seul : accolé à un badge, il se faisait
-            tronquer à la première lettre. */}
-        <div className="truncate text-[0.72rem] font-semibold">{player.name}</div>
-        <div className="tnum text-[0.62rem] text-ink-dim">
-          {player.totalScore} pts ·{' '}
-          {closer ? (
-            <span className="font-bold text-danger">fermé</span>
-          ) : (
-            player.visibleSum
-          )}
+function OpponentPanel({ player, solo, active, closer, target, move, onOpen }: PanelProps) {
+  const identity = (
+    <>
+      <div className="flex items-center gap-1.5">
+        <Avatar player={player} active={active} size="sm" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[0.72rem] font-semibold leading-tight">{player.name}</div>
+          {/* En colonne étroite la ligne passait à deux : on s'en tient au score,
+              le nombre de dos se compte sur la grille juste en dessous. */}
+          <div className="tnum truncate text-[0.62rem] leading-tight text-ink-dim">
+            {player.totalScore} pts
+            {solo && ` · visible ${player.visibleSum} · ${player.faceDownCount} cachées`}
+          </div>
         </div>
-        <div className="mt-1">
+        {closer && (
+          <span className="shrink-0 rounded-full bg-danger/20 px-1.5 py-px text-[0.55rem] font-bold text-danger">
+            fermé
+          </span>
+        )}
+      </div>
+
+      {/* Hauteur réservée : le dernier coup apparaît sans pousser la grille. */}
+      <div className="h-[0.95rem] truncate text-[0.6rem] leading-[0.95rem] text-accent/85">
+        {move}
+      </div>
+    </>
+  );
+
+  const frame = [
+    'flex min-h-0 shrink-0 rounded-2xl border p-1.5 text-left transition-colors',
+    active ? 'border-accent/60 bg-accent/10' : 'border-white/10 bg-white/[0.04]',
+  ].join(' ');
+
+  const label = `Voir la grille de ${player.name} en grand — ${player.totalScore} points, ${player.faceDownCount} cartes cachées`;
+
+  if (solo) {
+    return (
+      <button type="button" onClick={onOpen} aria-label={label} className={`${frame} w-full max-w-[26rem] items-stretch gap-2`}>
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+          {identity}
           <ScoreMeter score={player.totalScore} target={target} />
+        </div>
+        {/* Carrée par la hauteur du panneau ; le garde-fou de largeur évite
+            qu'un écran très court et étroit ne la fasse déborder. */}
+        <div className="h-full max-w-[62%] shrink-0" style={{ aspectRatio: '1' }}>
+          <PlayerGrid grid={player.grid} size="sm" />
+        </div>
+      </button>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onOpen} aria-label={label} className={`${frame} min-w-[7.5rem] max-w-[13rem] flex-1 flex-col`}>
+      <div className="shrink-0">{identity}</div>
+
+      <div className="fit-box min-h-0 flex-1">
+        <div className="fit-square">
+          <PlayerGrid grid={player.grid} size="sm" />
         </div>
       </div>
 
-      {/* Aperçu : on y lit la couleur dominante et le nombre de dos, pas les chiffres. */}
-      <div className="w-[2.6rem] shrink-0" aria-hidden>
-        <PlayerGrid grid={player.grid} size="xs" />
+      <div className="mt-1 shrink-0">
+        <ScoreMeter score={player.totalScore} target={target} />
       </div>
     </button>
   );
 }
 
-function OpponentSheet({
+/** La grille d'un adversaire en grand, quand on veut vraiment la détailler. */
+export function OpponentSheet({
   player,
   active,
   closer,

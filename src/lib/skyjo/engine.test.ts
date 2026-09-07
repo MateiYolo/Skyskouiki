@@ -520,7 +520,7 @@ describe('projection client', () => {
     expect(serialized).not.toContain('"drawPile"');
   });
 
-  it('montre la carte en main au joueur actif seulement', () => {
+  it('garde pour lui la carte piochée face cachée', () => {
     let s = started(2);
     const id = s.players[s.currentPlayerIndex].id;
     const other = s.players[(s.currentPlayerIndex + 1) % 2].id;
@@ -528,6 +528,20 @@ describe('projection client', () => {
 
     expect(toView(s, id).heldCard).toBe(s.heldCard);
     expect(toView(s, other).heldCard).toBeNull();
+  });
+
+  it('montre à tous la carte prise dans la défausse', () => {
+    let s = started(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    const other = s.players[(s.currentPlayerIndex + 1) % 2].id;
+    const top = s.discardPile.at(-1)!;
+    s = play(s, { type: 'takeDiscard', playerId: id });
+
+    // Elle était face visible sur la table : la cacher serait retirer au jeu
+    // une information que tout le monde avait déjà.
+    expect(toView(s, id).heldCard).toBe(top);
+    expect(toView(s, other).heldCard).toBe(top);
+    expect(toView(s, other).heldFrom).toBe('discard');
   });
 
   it('annonce les actions légales du moment', () => {

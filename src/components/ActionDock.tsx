@@ -23,10 +23,11 @@ export interface ActionDockProps {
   emphasis: boolean;
   drawPileCount: number;
   discardTop: number | null;
+  /** Déjà filtrée par le serveur : `null` quand le porteur seul a le droit de la voir. */
   heldCard: number | null;
   heldFrom: 'draw' | 'discard' | null;
-  /** Vrai si c'est le joueur local qui tient la carte (sinon on montre juste un dos). */
-  heldByMe: boolean;
+  /** Ce que fait l'adversaire quand c'est lui qui tient la carte. */
+  heldNote: string | null;
   canDraw: boolean;
   canTakeDiscard: boolean;
   canDiscardHeld: boolean;
@@ -51,7 +52,7 @@ export function ActionDock({
   discardTop,
   heldCard,
   heldFrom,
-  heldByMe,
+  heldNote,
   canDraw,
   canTakeDiscard,
   canDiscardHeld,
@@ -60,11 +61,15 @@ export function ActionDock({
   onDiscardHeld,
 }: ActionDockProps) {
   const holding = heldFrom !== null;
+  // Le serveur ne descend la valeur que si le joueur a le droit de la connaître :
+  // la sienne toujours, celle d'un adversaire seulement s'il l'a prise dans la
+  // défausse — auquel cas tout le monde l'a vue passer.
+  const heldVisible = heldCard !== null;
 
   return (
     <div className="safe-bottom shrink-0 border-t border-white/8 bg-felt-900/60 px-4 pt-2 backdrop-blur-sm">
       {/* Consigne : deux lignes réservées, pour que rien ne saute d'un tour à l'autre. */}
-      <div className="mb-1.5 flex h-[2.5rem] flex-col justify-center text-center">
+      <div className="mb-1 flex h-[2.35rem] flex-col justify-center text-center">
         <motion.div
           key={title}
           initial={{ opacity: 0, y: 5 }}
@@ -73,12 +78,12 @@ export function ActionDock({
         >
           {title}
         </motion.div>
-        <div className="text-[0.68rem] leading-tight text-ink-faint">{hint}</div>
+        <div className="text-[0.68rem] leading-tight text-ink-faint">{heldNote ?? hint}</div>
       </div>
 
       <div className="flex items-end justify-center gap-5 pb-1">
         {/* Pioche */}
-        <div className="flex w-[4.1rem] flex-col items-center gap-1" data-testid="draw-pile">
+        <div className="flex w-[3.8rem] flex-col items-center gap-1" data-testid="draw-pile">
           {/* Une pile hors d'atteinte s'efface un peu : la défausse reste lisible,
               mais on ne la confond pas avec un bouton. */}
           <div className={`relative w-full ${canDraw ? 'is-playable' : 'opacity-70'}`}>
@@ -104,7 +109,7 @@ export function ActionDock({
         </div>
 
         {/* Carte en main : emplacement toujours présent, rempli ou non. */}
-        <div className="flex w-[5.2rem] flex-col items-center gap-1">
+        <div className="flex w-[4.8rem] flex-col items-center gap-1">
           <div className="relative aspect-[3/4] w-full">
             <AnimatePresence>
               {holding ? (
@@ -119,10 +124,10 @@ export function ActionDock({
                 >
                   <PlayingCard
                     layoutId="held-card"
-                    value={heldByMe ? heldCard : null}
-                    faceUp={heldByMe}
+                    value={heldCard}
+                    faceUp={heldVisible}
                     size="lg"
-                    aria-label={heldByMe && heldCard !== null ? `En main : ${heldCard}` : 'Carte en main'}
+                    aria-label={heldVisible ? `Carte en main : ${heldCard}` : 'Carte en main, face cachée'}
                   />
                 </motion.div>
               ) : (
@@ -152,7 +157,7 @@ export function ActionDock({
         </div>
 
         {/* Défausse */}
-        <div className="flex w-[4.1rem] flex-col items-center gap-1" data-testid="discard-pile">
+        <div className="flex w-[3.8rem] flex-col items-center gap-1" data-testid="discard-pile">
           <div className={`relative w-full ${canTakeDiscard ? 'is-playable' : 'opacity-70'}`}>
             {discardTop === null ? (
               <div className="aspect-[3/4] w-full rounded-lg border border-dashed border-white/12" />
