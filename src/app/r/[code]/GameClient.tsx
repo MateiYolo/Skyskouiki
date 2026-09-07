@@ -13,7 +13,7 @@ import { GameOverPanel, RoundSummary } from '@/components/Overlays';
 import { useMoveEcho } from '@/lib/client/echo';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
 import { MOVE } from '@/lib/client/motion';
-import { cue, initAudio, isMuted, setMuted } from '@/lib/client/feedback';
+import { armAudio, cue, initAudio, isMuted, setMuted } from '@/lib/client/feedback';
 import { useGame } from '@/lib/client/useGame';
 import { heldSummary, lastMove } from '@/lib/skyjo';
 import type { GameView } from '@/lib/skyjo';
@@ -67,11 +67,17 @@ export function GameClient({ code }: { code: string }) {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMutedState(isMuted()), []);
 
+  // Le son se prépare au premier geste, hors du chemin d'un coup.
+  useEffect(armAudio, []);
+
   const run = useCallback(
     async (action: Parameters<typeof act>[0]) => {
-      initAudio();
-      cue('tap');
-      const failure = await act(action);
+      // L'action d'abord : c'est elle qui fait bouger l'écran. Le son part dans
+      // la tâche suivante, pour que la synthèse ne s'intercale pas entre le
+      // doigt et la première image.
+      const pending = act(action);
+      setTimeout(() => cue('tap'), 0);
+      const failure = await pending;
       if (failure) setNotice(failure);
     },
     [act],
@@ -118,6 +124,12 @@ export function GameClient({ code }: { code: string }) {
   const myTurn = view.currentPlayerId === view.you.id;
   const move = lastMove(view);
   const held = heldSummary(view);
+  // Qui tient la carte posée au milieu de la table. Sans nom dessus, elle
+  // n'appartient à personne et un tour d'adversaire se lit comme un décor.
+  const carrier = view.heldFrom !== null ? view.players.find((p) => p.id === view.currentPlayerId) : null;
+  const holder = carrier
+    ? { name: carrier.name, emoji: carrier.emoji, isMe: carrier.id === view.you.id }
+    : null;
   // Résolu au rendu : un joueur qui quitte referme sa fiche de lui-même.
   const inspected = opponents.find((p) => p.id === inspecting) ?? null;
 
@@ -213,6 +225,9 @@ export function GameClient({ code }: { code: string }) {
             heldCard={view.heldCard}
             heldFrom={view.heldFrom}
             heldNote={held?.text ?? null}
+            holder={holder}
+            drewFrom={echo?.drewFrom ?? null}
+            echoKey={echo?.version ?? 0}
             canDraw={legal.has('drawFromPile')}
             canTakeDiscard={legal.has('takeDiscard')}
             canDiscardHeld={legal.has('discardHeld')}

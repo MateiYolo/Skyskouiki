@@ -163,22 +163,55 @@ export function PlayingCard({
     transition: SNAP,
   };
 
-  // Une carte qu'on ne peut pas jouer n'est pas un bouton : les grilles adverses
-  // en alignent douze, et douze boutons désactivés encombrent autant le lecteur
-  // d'écran que le HTML — la vignette d'un adversaire est elle-même un bouton,
-  // qui n'a pas le droit d'en contenir.
-  if (!interactive) {
-    return (
-      <motion.div {...shared} role="img" aria-label={label}>
-        {inner}
-      </motion.div>
-    );
-  }
+  /**
+   * Toujours le même élément, jouable ou non.
+   *
+   * Alterner entre `<button>` et `<div>` selon qu'une case est une cible
+   * paraissait plus propre, mais React voyait deux types différents : à chaque
+   * changement de tour, les douze cartes étaient démontées puis remontées. Le
+   * retournement ne s'animait donc jamais — la carte sautait d'un état à
+   * l'autre, ce qui se lit comme une latence alors que c'est un clignotement.
+   *
+   * Reste la raison d'origine de ne pas tout mettre en boutons : une grille
+   * adverse en aligne douze, injouables, et la vignette qui les contient est
+   * elle-même un bouton. Ce n'est donc pas l'élément qui change, mais son rôle.
+   */
+  /**
+   * Au contact, pas au relâchement.
+   *
+   * Entre le doigt qui touche et l'événement `click`, il y a toute la durée du
+   * geste — souvent plus de cent millisecondes, et c'est du temps pendant
+   * lequel l'écran ne dit rien. Rien ici ne défile ni ne se glisse : un contact
+   * sur une carte jouable ne peut vouloir dire qu'une chose.
+   */
+  const press = (event: { button?: number; isPrimary?: boolean }) => {
+    if (!interactive) return;
+    if (event.button !== undefined && event.button !== 0) return;
+    if (event.isPrimary === false) return;
+    onClick!();
+  };
 
   return (
-    <motion.button {...shared} type="button" onClick={onClick} aria-label={label} whileTap={{ scale: 0.96 }}>
+    <motion.div
+      {...shared}
+      role={interactive ? 'button' : 'img'}
+      aria-label={label}
+      tabIndex={interactive ? 0 : undefined}
+      onPointerDown={interactive ? press : undefined}
+      onKeyDown={
+        interactive
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                press({});
+              }
+            }
+          : undefined
+      }
+      whileTap={interactive ? { scale: 0.96 } : undefined}
+    >
       {inner}
-    </motion.button>
+    </motion.div>
   );
 }
 

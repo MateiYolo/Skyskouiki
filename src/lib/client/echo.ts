@@ -25,6 +25,8 @@ export interface MoveEcho {
   touched: Record<string, number>;
   /** Par joueur, le groupe qu'il vient d'éliminer. */
   cleared: Record<string, ClearEcho>;
+  /** Pile où la dernière carte a été prise : elle s'allume au passage. */
+  drewFrom: 'draw' | 'discard' | null;
 }
 
 export function useMoveEcho(view: GameView | null): MoveEcho | null {
@@ -41,6 +43,7 @@ export function useMoveEcho(view: GameView | null): MoveEcho | null {
 
     const touched: Record<string, number> = {};
     const cleared: Record<string, ClearEcho> = {};
+    let drewFrom: 'draw' | 'discard' | null = null;
 
     for (const event of view.lastEvents) {
       switch (event.type) {
@@ -48,6 +51,9 @@ export function useMoveEcho(view: GameView | null): MoveEcho | null {
         case 'flipped':
         case 'initialFlip':
           touched[event.playerId] = event.index;
+          break;
+        case 'drew':
+          drewFrom = event.from;
           break;
         case 'groupCleared':
           cleared[event.playerId] = {
@@ -60,7 +66,7 @@ export function useMoveEcho(view: GameView | null): MoveEcho | null {
       }
     }
 
-    setEcho({ version: view.version, touched, cleared });
+    setEcho({ version: view.version, touched, cleared, drewFrom });
   }, [view]);
 
   return echo;

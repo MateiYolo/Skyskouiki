@@ -40,6 +40,20 @@ export function initAudio() {
   void ctx?.resume();
 }
 
+/**
+ * Prépare le son au tout premier contact avec la page.
+ *
+ * Un `AudioContext` coûte quelques dizaines de millisecondes à construire, et
+ * les navigateurs mobiles refusent de le créer hors d'un geste utilisateur. Le
+ * faire au premier tap sur une carte, c'était faire payer ce prix à la carte —
+ * elle attendait le son avant de se retourner. On l'arme donc sur le premier
+ * geste venu, quel qu'il soit, et les coups n'en entendent plus parler.
+ */
+export function armAudio() {
+  if (typeof document === 'undefined') return;
+  document.addEventListener('pointerdown', () => initAudio(), { once: true, capture: true });
+}
+
 export function isMuted() {
   return muted;
 }
