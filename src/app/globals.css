@@ -125,10 +125,90 @@ button,
 }
 
 /* Une douzaine de cartes jouables en même temps : un liseré net se lit bien,
-   là où douze halos pulsés se chevauchent et brouillent la grille. */
+   là où douze halos pulsés se chevauchent et brouillent la grille. Trois
+   liserés distincts hiérarchisent ce qui, sinon, se vaudrait à l'œil :
+   - `target` : posable, sans plus ;
+   - `good`   : le compte baisse ;
+   - `combo`  : le groupe saute — la seule chose qui mérite qu'on clignote. */
 .is-target {
-  outline: 2px solid rgb(255 204 77 / 0.75);
+  outline: 2px solid rgb(255 204 77 / 0.7);
   outline-offset: 2px;
+}
+
+.is-good {
+  outline: 3px solid rgb(74 222 128 / 0.95);
+  outline-offset: 2px;
+}
+
+.is-combo {
+  outline: 3px solid rgb(255 204 77 / 0.95);
+  outline-offset: 2px;
+  animation: combo 1.1s ease-in-out infinite;
+}
+
+@keyframes combo {
+  0%,
+  100% {
+    outline-color: rgb(255 204 77 / 0.95);
+    filter: brightness(1);
+  }
+  50% {
+    outline-color: rgb(255 255 255 / 0.95);
+    filter: brightness(1.22);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Mise en page de la table
+   -------------------------------------------------------------------------- */
+
+/* La zone qui donne sa taille à la grille du joueur. Sans `container-type`,
+   `100cqh` plus bas n'aurait rien à quoi se référer. */
+@utility fit-box {
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  /* Sur un écran très haut, la grille est bridée par la largeur : le reste se
+     partage au-dessus et au-dessous plutôt que de s'accumuler en bas. */
+  justify-content: center;
+}
+
+/* La plus grande boîte carrée qui tient dans `fit-box`, largeur *et* hauteur
+   comprises. Une grille 4×3 de cartes 3:4 est carrée : caler le carré suffit.
+   `h-full` seul ne marchait pas — il fixait la hauteur puis débordait en
+   largeur sur les écrans hauts, et rabotait les cartes sur les écrans courts. */
+@utility fit-square {
+  aspect-ratio: 1;
+  width: min(100%, 100cqh);
+  margin-inline: auto;
+}
+
+/* Le chiffre suit la carte : une taille en `cqw` reste juste que la grille
+   fasse 300 ou 400 px de large, sans palier codé en dur. */
+@utility card-face {
+  container-type: inline-size;
+}
+
+.card-numeral {
+  font-size: 38cqw;
+}
+
+/* Le losange du dos : un repère, pas un chiffre. */
+.card-pip {
+  font-size: 20cqw;
+}
+
+/* La bande d'adversaires défile : un fondu à droite dit qu'il y a une suite. */
+@utility fade-right {
+  mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent 100%);
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes rise {

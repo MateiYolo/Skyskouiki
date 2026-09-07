@@ -1,25 +1,70 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
-import { EmptySlot, PlayingCard, type CardSize } from './PlayingCard';
+import { EmptySlot, PlayingCard, type CardIntent, type CardSize } from './PlayingCard';
 import type { ViewCell } from '@/lib/skyjo';
+
+/** Ce qu'on annonce sur une case avant que le joueur la touche. */
+export interface CellCue {
+  intent: CardIntent;
+  /** Solde du score si la carte tenue atterrit là. `null` = case cachée, donc inconnu. */
+  delta?: number | null;
+  /** Le placement fait sauter une colonne ou une ligne. */
+  combo?: boolean;
+}
 
 export interface PlayerGridProps {
   grid: ViewCell[];
   size?: CardSize;
   /** Index sur lesquels le joueur peut agir maintenant. */
   isTarget?: (index: number) => boolean;
+  /** Ce qu'on annonce sur chaque case jouable. */
+  cueFor?: (index: number) => CellCue | null;
   onCell?: (index: number) => void;
   /** Identifiant du joueur : sert aux transitions partagées entre la main et la grille. */
   layoutKey?: string;
 }
 
-/** La grille 4 × 3 d'un joueur. Une case vide est une colonne déjà éliminée. */
-export function PlayerGrid({ grid, size = 'md', isTarget, onCell, layoutKey }: PlayerGridProps) {
-  const gap = size === 'xs' ? 'gap-[3px]' : size === 'sm' ? 'gap-1' : 'gap-1.5';
+/** Pastille de solde : « −7 » se lit plus vite que « tu passes de 9 à 2 ». */
+function DeltaBadge({ delta, combo }: { delta: number | null | undefined; combo?: boolean }) {
+  if (combo) {
+    return (
+      <span className="pointer-events-none absolute -right-1 -top-1 z-10 rounded-full bg-accent px-1.5 py-px text-[0.6rem] font-black leading-tight text-felt-900 shadow-lg">
+        ✦
+      </span>
+    );
+  }
+  // Une case cachée reste un pari : le dos de la carte le dit déjà, et huit
+  // pastilles « ? » n'ajouteraient que du bruit là où il faut lire vite.
+  if (delta === undefined || delta === null) return null;
 
   return (
-    <div className={`grid grid-cols-4 ${gap}`}>
+    <span
+      className={[
+        'pointer-events-none tnum absolute -right-1 -top-1 z-10 rounded-full px-1.5 py-px text-[0.6rem] font-bold leading-tight shadow-lg',
+        // Un échange à somme nulle n'est ni une bonne ni une mauvaise idée :
+        // le peindre en rouge découragerait un coup parfaitement neutre.
+        delta < 0 ? 'bg-good text-felt-900' : delta === 0 ? 'bg-white/30 text-ink' : 'bg-danger text-white',
+      ].join(' ')}
+    >
+      {delta > 0 ? `+${delta}` : delta}
+    </span>
+  );
+}
+
+/** La grille 4 × 3 d'un joueur. Une case vide est une colonne déjà éliminée. */
+export function PlayerGrid({
+  grid,
+  size = 'md',
+  isTarget,
+  cueFor,
+  onCell,
+  layoutKey,
+}: PlayerGridProps) {
+  const gap = size === 'xs' ? 'gap-[2px]' : size === 'sm' ? 'gap-1' : 'gap-1.5';
+
+  return (
+    <div className={`grid h-full grid-cols-4 grid-rows-3 ${gap}`}>
       {grid.map((cell, index) => {
         if (cell === null) {
           return (
@@ -36,6 +81,11 @@ export function PlayerGrid({ grid, size = 'md', isTarget, onCell, layoutKey }: P
         }
 
         const target = isTarget?.(index) ?? false;
+        const cue = target ? (cueFor?.(index) ?? null) : null;
+        const label = cell.faceUp
+          ? `Carte ${cell.value}${cue?.delta != null ? `, échange ${cue.delta > 0 ? '+' : ''}${cue.delta} points` : ''}${cue?.combo ? ', complète un groupe' : ''}`
+          : `Carte face cachée${cue?.combo ? ', complète un groupe' : ''}`;
+
         return (
           <PlayingCard
             key={index}
@@ -43,8 +93,10 @@ export function PlayerGrid({ grid, size = 'md', isTarget, onCell, layoutKey }: P
             value={cell.faceUp ? cell.value : null}
             faceUp={cell.faceUp}
             size={size}
-            target={target}
+            intent={cue?.intent ?? (target ? 'target' : 'none')}
+            badge={cue ? <DeltaBadge delta={cue.delta} combo={cue.combo} /> : undefined}
             onClick={target && onCell ? () => onCell(index) : undefined}
+            aria-label={label}
           />
         );
       })}
