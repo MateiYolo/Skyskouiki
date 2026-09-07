@@ -1,26 +1,147 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   Skyskouiki — jetons de design
+   Ambiance : une table de jeu le soir. Fond profond, cartes qui claquent.
+   ========================================================================== */
+
+@theme {
+  --color-felt-900: #0b0716;
+  --color-felt-800: #150d29;
+  --color-felt-700: #1f1340;
+  --color-felt-600: #2c1a58;
+
+  --color-ink: #f4f0ff;
+  --color-ink-dim: #a99ec7;
+  --color-ink-faint: #6c6090;
+
+  --color-accent: #ffcc4d;
+  --color-accent-deep: #f2a33c;
+  --color-danger: #ff5a5f;
+  --color-good: #4ade80;
+
+  /* Code couleur officiel des cartes Skyjo. */
+  --color-card-navy: #1b3a8f;
+  --color-card-sky: #38bdf8;
+  --color-card-green: #43b14b;
+  --color-card-yellow: #f5c518;
+  --color-card-red: #e23c3c;
+
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-numeric: var(--font-numeric-stack);
+
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-numeric-stack: var(--font-outfit), ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+  color-scheme: dark;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
+  overscroll-behavior: none;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  background-color: var(--color-felt-900);
+  /* Deux halos chauds décalés : la table est éclairée, pas uniforme. */
+  background-image:
+    radial-gradient(ellipse 80% 55% at 50% -10%, #3b1d6e 0%, transparent 65%),
+    radial-gradient(ellipse 70% 50% at 15% 105%, #1b2f6b 0%, transparent 60%),
+    radial-gradient(ellipse 60% 45% at 95% 80%, #4a1f4e 0%, transparent 60%);
+  background-attachment: fixed;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Rien ne se sélectionne par inadvertance quand on tapote vite. */
+button,
+[role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Utilitaires
+   -------------------------------------------------------------------------- */
+
+@utility grain {
+  position: relative;
+}
+
+/* Léger grain : évite l'aspect « dégradé plastique » sur grands aplats. */
+@utility grain-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+}
+
+@utility safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@utility safe-top {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+/* Chiffres alignés : les scores ne doivent pas danser quand ils changent. */
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* --------------------------------------------------------------------------
+   Animations récurrentes
+   -------------------------------------------------------------------------- */
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.035);
+    filter: brightness(1.18);
+  }
+}
+
+/* Appelle l'œil vers ce qui est jouable, sans clignoter. */
+.is-playable {
+  animation: breathe 1.9s var(--ease-pop) infinite;
+}
+
+/* Une douzaine de cartes jouables en même temps : un liseré net se lit bien,
+   là où douze halos pulsés se chevauchent et brouillent la grille. */
+.is-target {
+  outline: 2px solid rgb(255 204 77 / 0.75);
+  outline-offset: 2px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise {
+  animation: rise 0.45s var(--ease-pop) both;
 }
