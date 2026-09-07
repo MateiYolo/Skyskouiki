@@ -73,11 +73,14 @@ export function flightsForAction(
       const cell = view.players.find((p) => p.id === playerId)?.grid[action.index];
       if (cell === undefined || cell === null) return [];
       const to = cellAnchor(playerId, action.index);
-      const out: FlightRequest[] = [{ from: HAND, to, value: view.heldCard, delay: 0 }];
-      // La carte remplacée ne part vers la défausse que si on sait laquelle
-      // c'est ; sur une case cachée, le serveur la révélera à sa réponse.
-      if (cell.faceUp) out.push({ from: to, to: DISCARD_PILE, value: cell.value, delay: 0.16 });
-      return out;
+      return [
+        { from: HAND, to, value: view.heldCard, delay: 0 },
+        // La carte remplacée part toujours, même quand on ignore encore sa
+        // valeur : voir une carte quitter sa grille pour la défausse est
+        // justement ce qui rend l'échange lisible. Face cachée en attendant —
+        // le serveur révélera le sommet de la défausse à sa réponse.
+        { from: to, to: DISCARD_PILE, value: cell.faceUp ? cell.value : null, delay: 0.16 },
+      ];
     }
 
     default:

@@ -34,12 +34,37 @@ export interface TableCenterProps {
   heldFrom: 'draw' | 'discard' | null;
   /** Ce que fait l'adversaire quand c'est lui qui tient la carte. */
   heldNote: string | null;
+  /** À qui est la carte posée au milieu. */
+  holder: { name: string; emoji: string; isMe: boolean } | null;
+  /** Pile où la dernière carte a été prise : elle s'allume au passage. */
+  drewFrom: 'draw' | 'discard' | null;
+  /** Version de la partie : rallume la pile à chaque nouvelle prise. */
+  echoKey: number;
   canDraw: boolean;
   canTakeDiscard: boolean;
   canDiscardHeld: boolean;
   onDraw: () => void;
   onTakeDiscard: () => void;
   onDiscardHeld: () => void;
+}
+
+/**
+ * La pile où quelqu'un vient de prendre une carte s'allume une fois.
+ *
+ * Sans ça, la prise d'un adversaire n'a pas de point de départ visible : la
+ * carte apparaît au milieu sans qu'on ait vu d'où elle sort, et savoir s'il a
+ * pioché à l'aveugle ou récupéré la défausse change tout ce qu'on en déduit.
+ */
+function TakenFlash() {
+  return (
+    <motion.span
+      className="pointer-events-none absolute -inset-[3px] z-10 rounded-lg"
+      style={{ boxShadow: '0 0 0 2px var(--color-accent), 0 0 18px rgb(255 204 77 / 0.55)' }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: [0, 1, 1, 0] }}
+      transition={{ duration: 1.1, times: [0, 0.1, 0.5, 1], ease: 'linear' }}
+    />
+  );
 }
 
 function PileLabel({ children, accent = false }: { children: React.ReactNode; accent?: boolean }) {
@@ -63,6 +88,9 @@ export function TableCenter({
   heldCard,
   heldFrom,
   heldNote,
+  holder,
+  drewFrom,
+  echoKey,
   canDraw,
   canTakeDiscard,
   canDiscardHeld,
@@ -88,7 +116,7 @@ export function TableCenter({
     // sait de part et d'autre à qui appartient chaque moitié de l'écran.
     <div className="shrink-0 border-y border-white/8 bg-white/[0.03] px-4 py-1">
       {/* Consigne : deux lignes réservées, pour que rien ne saute d'un tour à l'autre. */}
-      <div className="mb-0.5 flex h-[2.1rem] flex-col justify-center text-center">
+      <div className="mb-1.5 flex h-[2.1rem] flex-col justify-center text-center">
         <motion.div
           key={title}
           initial={{ opacity: 0, y: 5 }}
@@ -121,12 +149,20 @@ export function TableCenter({
               onClick={canDraw ? onDraw : undefined}
               aria-label="Piocher"
             />
+            {drewFrom === 'draw' && <TakenFlash key={echoKey} />}
           </div>
           <PileLabel>pioche</PileLabel>
         </div>
 
-        {/* Carte en main : emplacement toujours présent, rempli ou non. */}
-        <div className="flex w-[3.7rem] flex-col items-center gap-1">
+        {/* Carte en main : emplacement toujours présent, rempli ou non. Il
+            penche vers celui qui la tient — vers le haut quand elle est à
+            l'adversaire, vers le bas quand elle est à moi — et porte son nom.
+            Posée à plat au milieu, elle n'appartenait visiblement à personne. */}
+        <motion.div
+          className="flex w-[3.7rem] flex-col items-center gap-1"
+          animate={{ y: holder ? (holder.isMe ? 4 : -6) : 0 }}
+          transition={MOVE}
+        >
           <div data-anchor={HAND} className="relative aspect-[3/4] w-full">
             <AnimatePresence>
               {holding ? (
@@ -167,11 +203,16 @@ export function TableCenter({
               >
                 Jeter
               </button>
+            ) : holder && !holder.isMe ? (
+              <span className="flex max-w-full items-center gap-1 whitespace-nowrap text-[0.62rem] font-bold text-accent">
+                <span aria-hidden>{holder.emoji}</span>
+                <span className="truncate">{holder.name}</span>
+              </span>
             ) : (
               <PileLabel>{holding ? 'à placer' : ' '}</PileLabel>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* Défausse */}
         <div className="flex w-[3.1rem] flex-col items-center gap-1" data-testid="discard-pile">
@@ -208,6 +249,7 @@ export function TableCenter({
                 }
               />
             )}
+            {drewFrom === 'discard' && <TakenFlash key={echoKey} />}
           </div>
           <PileLabel accent={throwHere}>{throwHere ? 'jeter ici' : 'défausse'}</PileLabel>
         </div>
