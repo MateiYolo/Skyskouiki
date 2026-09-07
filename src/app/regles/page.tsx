@@ -4,15 +4,31 @@ import { PlayingCard } from '@/components/PlayingCard';
 
 export const metadata: Metadata = {
   title: 'Règles · Skyskouiki',
-  description: 'Les règles officielles du Skyjo, en français.',
+  description: 'Les règles officielles du Skyjo, en français, plus une règle maison.',
 };
 
-function Section({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
+function Section({
+  n,
+  title,
+  house,
+  children,
+}: {
+  n: string;
+  title: string;
+  /** Signale une règle qui n'existe pas dans le jeu original. */
+  house?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <section className="border-t border-white/10 py-6">
-      <h2 className="mb-3 flex items-baseline gap-2.5 text-lg font-bold">
+      <h2 className="mb-3 flex flex-wrap items-baseline gap-2.5 text-lg font-bold">
         <span className="tnum text-xs font-black text-accent">{n}</span>
         {title}
+        {house && (
+          <span className="rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-accent">
+            règle maison
+          </span>
+        )}
       </h2>
       <div className="space-y-3 text-[0.9rem] leading-relaxed text-ink-dim">{children}</div>
     </section>
@@ -32,7 +48,8 @@ export default function RulesPage() {
 
       <h1 className="text-3xl font-black tracking-tight">Les règles</h1>
       <p className="mt-2 text-sm text-ink-dim">
-        Celles du jeu original, sans variante maison. But du jeu&nbsp;: avoir le plus petit total.
+        Celles du jeu original, plus une règle maison — signalée là où elle s’applique. But du
+        jeu&nbsp;: avoir le plus petit total.
       </p>
 
       <Section n="01" title="Le matériel">
@@ -91,18 +108,34 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="05" title="Fin de manche">
+      <Section n="05" title="Les lignes" house>
+        <p>
+          Ici, une <Key>ligne entière de quatre cartes identiques</Key> saute aussi. Ce n’est{' '}
+          <Key>pas</Key> dans les règles du jeu de société&nbsp;: là-bas, seules les colonnes
+          comptent. Si tu joues avec les vraies cartes un jour, oublie cette section.
+        </p>
+        <p>
+          Il faut bien les quatre. Trois cartes identiques côte à côte dans une ligne ne suffisent
+          pas — sinon les manches tourneraient trop court.
+        </p>
+        <p>
+          Une carte peut compléter une colonne et une ligne du même coup&nbsp;: les deux partent, et
+          ça fait six cartes en moins d’un coup.
+        </p>
+      </Section>
+
+      <Section n="06" title="Fin de manche">
         <p>
           Dès qu’un joueur a <Key>retourné toutes ses cartes</Key>, la manche se termine&nbsp;: chacun
           des autres joue <Key>encore un tour</Key>, puis tout le monde révèle sa grille.
         </p>
         <p>
-          Une colonne de trois cartes identiques qui apparaît à ce dévoilement final est retirée
-          elle aussi, avant de compter.
+          Les colonnes et les lignes qui apparaissent à ce dévoilement final sont retirées elles
+          aussi, avant de compter.
         </p>
       </Section>
 
-      <Section n="06" title="Le comptage (et le piège)">
+      <Section n="07" title="Le comptage (et le piège)">
         <p>Chacun additionne les cartes qui lui restent. Les négatives se soustraient.</p>
         <p className="rounded-xl border border-danger/30 bg-danger/10 p-3 text-ink">
           <Key>La pénalité.</Key> Le joueur qui a fermé la manche <Key>double ses points</Key> s’il
@@ -115,14 +148,14 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="07" title="Fin de partie">
+      <Section n="08" title="Fin de partie">
         <p>
           On enchaîne les manches. Dès que quelqu’un atteint <Key>100 points ou plus</Key>, la partie
           s’arrête à la fin de cette manche. Le <Key>plus petit total</Key> l’emporte.
         </p>
       </Section>
 
-      <Section n="08" title="Cas particulier">
+      <Section n="09" title="Cas particulier">
         <p>
           Si la pioche s’épuise, on mélange la défausse — sauf sa carte du dessus — pour en refaire
           une.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, createGame } from './engine';
-import { DECK_COMPOSITION, DECK_SIZE, buildDeck, columnIndices, shuffle } from './rules';
+import { DECK_COMPOSITION, DECK_SIZE, buildDeck, columnIndices, rowIndices, shuffle } from './rules';
 import { toView } from './view';
 import type { Action, Cell, GameState } from './types';
 
@@ -216,12 +216,12 @@ describe('tour de jeu', () => {
   });
 });
 
-// --- colonnes ---------------------------------------------------------------
+// --- éliminations -----------------------------------------------------------
 
-/** Grille sans aucune colonne homogène : sert de base neutre aux scénarios. */
+/** Grille sans colonne ni ligne homogène : base neutre des scénarios. */
 const CLEAN = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-describe('règle des colonnes', () => {
+describe('élimination des colonnes (règle officielle)', () => {
   it('élimine une colonne de trois cartes identiques et la met à la défausse', () => {
     let s = started(2);
     const id = s.players[s.currentPlayerIndex].id;
@@ -238,9 +238,10 @@ describe('règle des colonnes', () => {
     // -1 (carte prise) +1 (le 2 remplacé) +3 (colonne éliminée)
     expect(s.discardPile.length).toBe(discardBefore + 3);
     expect(s.lastEvents).toContainEqual({
-      type: 'columnCleared',
+      type: 'groupCleared',
       playerId: id,
-      column: 1,
+      kind: 'column',
+      index: 1,
       value: 8,
     });
   });
@@ -265,6 +266,85 @@ describe('règle des colonnes', () => {
     s = play(s, { type: 'takeDiscard', playerId: id });
     s = play(s, { type: 'placeCard', playerId: id, index: 3 });
     expect(s.players.find((x) => x.id === id)!.grid[0]).not.toBeNull();
+  });
+});
+
+// --- lignes (règle maison) --------------------------------------------------
+
+describe('élimination des lignes (règle maison)', () => {
+  it('élimine une ligne de quatre cartes identiques', () => {
+    let s = started(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    // Ligne 1 = indices 4 à 7 : trois 6 en place, le 9 sera remplacé par un 6.
+    setGrid(s, id, [1, 2, 3, 4, 6, 6, 6, 9, 10, 11, 12, 5]);
+    s.discardPile.push(6);
+    const discardBefore = s.discardPile.length;
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 7 });
+
+    const grid = s.players.find((p) => p.id === id)!.grid;
+    for (const i of rowIndices(1)) expect(grid[i]).toBeNull();
+    // -1 (carte prise) +1 (le 9 remplacé) +4 (la ligne)
+    expect(s.discardPile.length).toBe(discardBefore + 4);
+    expect(s.lastEvents).toContainEqual({
+      type: 'groupCleared',
+      playerId: id,
+      kind: 'row',
+      index: 1,
+      value: 6,
+    });
+  });
+
+  it('laisse tranquilles trois cartes identiques côte à côte dans une ligne', () => {
+    let s = started(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    setGrid(s, id, [1, 2, 3, 4, 6, 6, 6, 9, 10, 11, 12, 5]);
+    s.discardPile.push(7);
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 0 });
+
+    const grid = s.players.find((p) => p.id === id)!.grid;
+    for (const i of rowIndices(1)) expect(grid[i]).not.toBeNull();
+    expect(s.lastEvents.some((e) => e.type === 'groupCleared')).toBe(false);
+  });
+
+  it('vide d’un seul coup la colonne et la ligne qui se croisent', () => {
+    let s = started(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    // L'index 8 est à l'intersection de la colonne 0 et de la ligne 2.
+    setGrid(s, id, [5, 1, 2, 3, 5, 4, 6, 7, 9, 5, 5, 5]);
+    s.discardPile.push(5);
+    const discardBefore = s.discardPile.length;
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 8 });
+
+    const grid = s.players.find((p) => p.id === id)!.grid;
+    for (const i of [...columnIndices(0), ...rowIndices(2)]) expect(grid[i]).toBeNull();
+    // Six cases distinctes retirées, la case commune n'étant comptée qu'une fois.
+    expect(s.discardPile.length).toBe(discardBefore + 6);
+    expect(s.lastEvents.filter((e) => e.type === 'groupCleared')).toHaveLength(2);
+  });
+
+  it('retire aussi une ligne révélée au dévoilement final', () => {
+    let s = started(2);
+    s.targetScore = 1000;
+    s.currentPlayerIndex = 0;
+    s.turnStep = 'choose';
+    setGrid(s, 'p0', CLEAN);
+    s.players[0].grid[11] = { value: 12, faceUp: false };
+    // p0 garde tout caché de son côté ; p1 cache une ligne de quatre 9.
+    setGrid(s, 'p1', [1, 2, 3, 4, 9, 9, 9, 9, 10, 11, 12, 5], false);
+
+    s = play(s, { type: 'drawFromPile', playerId: 'p0' });
+    s = play(s, { type: 'discardHeld', playerId: 'p0' });
+    s = play(s, { type: 'flipCard', playerId: 'p0', index: 11 });
+    s = neutralTurn(s, 0); // dernier tour de p1, sur une case hors de la ligne 1
+
+    expect(s.phase).toBe('roundOver');
+    for (const i of rowIndices(1)) expect(s.players[1].grid[i]).toBeNull();
   });
 });
 
@@ -318,12 +398,13 @@ describe('fin de manche', () => {
 
 // --- comptage ---------------------------------------------------------------
 
-// Grilles sans colonne homogène, écrites ligne par ligne (3 lignes × 4 colonnes).
-const LOW = [0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4]; // total 10
-const HIGH = [12, 12, 12, 12, 12, 12, 12, 12, 11, 10, 9, 8]; // total 134
-const MID = [1, 1, 1, 1, 1, 1, 1, 1, 0, 2, 3, 4]; // total 17
-const NEG_HIGH = [-1, -1, -1, -1, -1, -1, -1, -1, 0, -2, 0, -2]; // total -12
-const NEG_LOW = [-2, -2, -2, -2, -2, -2, -2, -2, -1, 0, -1, 0]; // total -18
+// Grilles écrites ligne par ligne (3 lignes × 4 colonnes), sans aucune colonne
+// ni ligne homogène : rien ne doit s'éliminer, le total reste celui annoncé.
+const LOW = [0, 0, 0, 1, 0, 0, 1, 0, 2, 3, 0, 0]; // total 7
+const HIGH = [11, 12, 12, 12, 12, 11, 12, 12, 12, 12, 11, 10]; // total 139
+const MID = [1, 1, 1, 2, 1, 1, 2, 1, 2, 3, 1, 1]; // total 17
+const NEG_HIGH = [-1, -1, -1, 0, -1, -1, 0, -1, 0, -2, -1, -1]; // total -10
+const NEG_LOW = [-1, -2, -2, -2, -2, -1, -2, -2, -2, -2, -1, 0]; // total -19
 
 describe('comptage des points', () => {
   /**
@@ -352,7 +433,7 @@ describe('comptage des points', () => {
     const s = scoreRound(CLEAN, LOW);
     const scores = s.lastRoundScores!;
     expect(scores[0].raw).toBe(78); // 1+2+…+12
-    expect(scores[1].raw).toBe(10);
+    expect(scores[1].raw).toBe(7);
     expect(scores[0].closedRound).toBe(true);
     expect(scores[1].closedRound).toBe(false);
   });
@@ -360,11 +441,11 @@ describe('comptage des points', () => {
   it('double le score du fermeur qui n’a pas le total le plus bas', () => {
     const s = scoreRound(HIGH, LOW);
     const [a, b] = s.lastRoundScores!;
-    expect(a.raw).toBe(134);
+    expect(a.raw).toBe(139);
     expect(a.doubled).toBe(true);
-    expect(a.final).toBe(268);
+    expect(a.final).toBe(278);
     expect(b.doubled).toBe(false);
-    expect(b.final).toBe(10);
+    expect(b.final).toBe(7);
   });
 
   it('double aussi en cas d’égalité : il faut être strictement le plus bas', () => {
@@ -380,26 +461,26 @@ describe('comptage des points', () => {
   it('ne double pas le fermeur quand il est seul le plus bas', () => {
     const s = scoreRound(LOW, HIGH);
     const [a] = s.lastRoundScores!;
-    expect(a.raw).toBe(10);
+    expect(a.raw).toBe(7);
     expect(a.doubled).toBe(false);
-    expect(a.final).toBe(10);
+    expect(a.final).toBe(7);
   });
 
   it('ne double jamais un total négatif ou nul', () => {
     const s = scoreRound(NEG_HIGH, NEG_LOW);
     const [a, b] = s.lastRoundScores!;
-    expect(a.raw).toBe(-12);
-    expect(b.raw).toBe(-18);
+    expect(a.raw).toBe(-10);
+    expect(b.raw).toBe(-19);
     expect(b.raw).toBeLessThan(a.raw); // le fermeur n'est pas le plus bas…
     expect(a.doubled).toBe(false); // …mais son total est négatif : pas de pénalité
-    expect(a.final).toBe(-12);
+    expect(a.final).toBe(-10);
   });
 
   it('cumule les manches et termine la partie à 100 points, le plus bas gagne', () => {
     const s = scoreRound(HIGH, LOW, 100);
     expect(s.phase).toBe('gameOver');
-    expect(s.players[0].totalScore).toBe(268);
-    expect(s.players[1].totalScore).toBe(10);
+    expect(s.players[0].totalScore).toBe(278);
+    expect(s.players[1].totalScore).toBe(7);
     expect(s.winnerId).toBe('p1');
   });
 
@@ -407,7 +488,7 @@ describe('comptage des points', () => {
     const s = scoreRound(LOW, MID, 100);
     expect(s.phase).toBe('roundOver');
     expect(s.winnerId).toBeNull();
-    expect(s.players[0].roundScores).toEqual([10]);
+    expect(s.players[0].roundScores).toEqual([7]);
   });
 
   it('enchaîne sur une nouvelle manche en gardant les scores cumulés', () => {

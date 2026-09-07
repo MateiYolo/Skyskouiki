@@ -7,6 +7,11 @@ Règles officielles, y compris les deux qui font le sel du jeu : l'élimination
 des colonnes de trois cartes identiques, et le doublement du score de celui qui
 ferme la manche sans avoir, à lui seul, le plus petit total.
 
+Une seule règle maison s'y ajoute, assumée : **une ligne entière de quatre
+cartes identiques saute elle aussi**. Le jeu de société ne connaît que les
+colonnes ; la page Règles de l'application signale l'écart pour qu'on ne
+l'emporte pas par erreur sur une vraie table.
+
 ## Comment ça marche
 
 ```
@@ -77,13 +82,15 @@ rôle de service. Le nettoyage des parties abandonnées se fait avec
 ## Tests
 
 ```bash
-npm test          # 32 tests du moteur : règles, comptage, confidentialité
+npm test          # 36 tests du moteur : règles, comptage, confidentialité
 npm run typecheck
 npm run smoke     # partie complète jouée par HTTP (serveur de dev requis)
 ```
 
 Le fichier `src/lib/skyjo/engine.test.ts` sert aussi de spécification lisible :
-chaque règle officielle y a son test nommé en français.
+chaque règle y a son test nommé en français, les officielles comme la maison —
+dont un test qui vérifie que trois cartes identiques côte à côte dans une ligne
+ne suffisent *pas*.
 
 ## Arborescence
 

@@ -4,7 +4,7 @@ import {
   MAX_PLAYERS,
   MIN_PLAYERS,
   buildDeck,
-  clearColumns,
+  clearGroups,
   countFaceDown,
   countFaceUp,
   emptyGrid,
@@ -194,7 +194,7 @@ export function applyAction(input: GameState, action: Action): ActionResult {
         placed,
         discarded: replaced,
       });
-      resolveColumns(s, player, events);
+      resolveGroups(s, player, events);
       endTurn(s, events);
       return commit();
     }
@@ -225,7 +225,7 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       if (cell.faceUp) return fail('Choisis une carte face cachée.');
       cell.faceUp = true;
       events.push({ type: 'flipped', playerId: player.id, index: action.index, value: cell.value });
-      resolveColumns(s, player, events);
+      resolveGroups(s, player, events);
       endTurn(s, events);
       return commit();
     }
@@ -324,9 +324,9 @@ function maybeStartPlay(s: GameState, events: GameEvent[]) {
   events.push({ type: 'turnStarted', playerId: s.players[s.currentPlayerIndex].id });
 }
 
-function resolveColumns(s: GameState, player: Player, events: GameEvent[]) {
-  for (const cleared of clearColumns(player.grid, s.discardPile)) {
-    events.push({ type: 'columnCleared', playerId: player.id, ...cleared });
+function resolveGroups(s: GameState, player: Player, events: GameEvent[]) {
+  for (const cleared of clearGroups(player.grid, s.discardPile)) {
+    events.push({ type: 'groupCleared', playerId: player.id, ...cleared });
   }
 }
 
@@ -371,14 +371,14 @@ function endTurn(s: GameState, events: GameEvent[]) {
 }
 
 /**
- * Fin de manche : on révèle tout, on applique une dernière fois la règle des
- * colonnes, puis on compte. Le joueur qui a fermé la manche double son score
+ * Fin de manche : on révèle tout, on applique une dernière fois les règles
+ * d'élimination (colonnes et lignes), puis on compte. Le joueur qui a fermé la manche double son score
  * s'il n'a pas, seul, le total le plus bas — et seulement si ce total est positif.
  */
 function finishRound(s: GameState, events: GameEvent[]) {
   for (const p of s.players) {
     for (const cell of p.grid) if (cell) cell.faceUp = true;
-    resolveColumns(s, p, events);
+    resolveGroups(s, p, events);
   }
 
   const raws = s.players.map((p) => gridSum(p.grid));

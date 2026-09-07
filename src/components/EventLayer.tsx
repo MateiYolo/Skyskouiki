@@ -48,19 +48,22 @@ export function EventLayer({ view }: { view: GameView }) {
 
     for (const event of view.lastEvents as GameEvent[]) {
       switch (event.type) {
-        case 'columnCleared': {
+        case 'groupCleared': {
           cue('clear');
+          const row = event.kind === 'row';
           if (mine(event.playerId)) {
             freshHero = {
               id: nextId++,
-              title: 'COLONNE !',
-              subtitle: `Trois ${event.value} envolés`,
+              title: row ? 'LIGNE !' : 'COLONNE !',
+              subtitle: row
+                ? `Quatre ${event.value} d’un coup`
+                : `Trois ${event.value} envolés`,
               tone: 'good',
             };
           } else {
             fresh.push({
               id: nextId++,
-              text: `${emojiOf(event.playerId)} ${nameOf(event.playerId)} dégage une colonne de ${event.value}`,
+              text: `${emojiOf(event.playerId)} ${nameOf(event.playerId)} dégage une ${row ? 'ligne' : 'colonne'} de ${event.value}`,
               tone: 'warn',
             });
           }

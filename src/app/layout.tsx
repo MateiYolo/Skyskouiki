@@ -10,7 +10,7 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: 'Skyskouiki',
-  description: 'Le Skyjo à deux, chacun sur son téléphone. Règles officielles, zéro pub.',
+  description: 'Le Skyjo à deux, chacun sur son téléphone. Règles officielles, une règle maison, zéro pub.',
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Skyskouiki' },
 };
 

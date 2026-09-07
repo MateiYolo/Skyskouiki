@@ -1,4 +1,4 @@
-import { COLS, GRID_SIZE, type Cell } from './types';
+import { COLS, GRID_SIZE, ROWS, type Cell, type GroupKind } from './types';
 
 /**
  * Composition officielle du jeu Skyjo : 150 cartes.
@@ -59,7 +59,12 @@ export function shuffle<T>(items: readonly T[], seed: number): { items: T[]; see
 
 /** Indices de la grille appartenant à la colonne `col` (haut vers bas). */
 export function columnIndices(col: number): number[] {
-  return [col, col + COLS, col + COLS * 2];
+  return Array.from({ length: ROWS }, (_, row) => col + row * COLS);
+}
+
+/** Indices de la grille appartenant à la ligne `row` (gauche vers droite). */
+export function rowIndices(row: number): number[] {
+  return Array.from({ length: COLS }, (_, col) => row * COLS + col);
 }
 
 export function emptyGrid(): Cell[] {
@@ -85,26 +90,55 @@ export function countFaceUp(grid: readonly Cell[]): number {
 }
 
 /**
- * Applique la règle des colonnes : trois cartes identiques face visible dans une
- * même colonne sont retirées de la grille et posées sur la défausse.
- * Mute `grid` et `discardPile`, renvoie les colonnes éliminées.
+ * Valeur commune à toutes ces cases, ou `null` si elles ne forment pas un
+ * groupe éliminable (case vide, carte encore cachée, ou valeurs différentes).
  */
-export function clearColumns(
-  grid: Cell[],
-  discardPile: number[],
-): Array<{ column: number; value: number }> {
-  const cleared: Array<{ column: number; value: number }> = [];
-  for (let col = 0; col < COLS; col++) {
-    const idx = columnIndices(col);
-    const cells = idx.map((i) => grid[i]);
-    if (cells.some((c) => c === null || !c.faceUp)) continue;
-    const value = cells[0]!.value;
-    if (!cells.every((c) => c!.value === value)) continue;
-    for (const i of idx) {
-      discardPile.push(grid[i]!.value);
-      grid[i] = null;
-    }
-    cleared.push({ column: col, value });
+function uniformValue(grid: readonly Cell[], indices: readonly number[]): number | null {
+  const first = grid[indices[0]];
+  if (!first || !first.faceUp) return null;
+  for (const i of indices) {
+    const cell = grid[i];
+    if (!cell || !cell.faceUp || cell.value !== first.value) return null;
   }
-  return cleared;
+  return first.value;
+}
+
+export interface ClearedGroup {
+  kind: GroupKind;
+  /** Numéro de la colonne ou de la ligne concernée. */
+  index: number;
+  value: number;
+}
+
+/**
+ * Élimine les groupes de cartes identiques face visible : les colonnes de trois
+ * (règle officielle) et les lignes de quatre (règle maison). Les cartes partent
+ * à la défausse et ne comptent plus.
+ *
+ * Les groupes sont d'abord repérés sur la grille intacte, puis retirés d'un
+ * bloc : sinon, vider une ligne en premier empêcherait une colonne qui la
+ * croise d'être reconnue.
+ *
+ * Mute `grid` et `discardPile`.
+ */
+export function clearGroups(grid: Cell[], discardPile: number[]): ClearedGroup[] {
+  const found: Array<ClearedGroup & { cells: number[] }> = [];
+
+  for (let col = 0; col < COLS; col++) {
+    const cells = columnIndices(col);
+    const value = uniformValue(grid, cells);
+    if (value !== null) found.push({ kind: 'column', index: col, value, cells });
+  }
+  for (let row = 0; row < ROWS; row++) {
+    const cells = rowIndices(row);
+    const value = uniformValue(grid, cells);
+    if (value !== null) found.push({ kind: 'row', index: row, value, cells });
+  }
+
+  for (const i of new Set(found.flatMap((group) => group.cells))) {
+    discardPile.push(grid[i]!.value);
+    grid[i] = null;
+  }
+
+  return found.map(({ kind, index, value }) => ({ kind, index, value }));
 }
