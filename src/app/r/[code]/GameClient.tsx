@@ -6,11 +6,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActionDock } from '@/components/ActionDock';
 import { EventLayer } from '@/components/EventLayer';
 import { MyBoard } from '@/components/MyBoard';
-import { OpponentStrip } from '@/components/OpponentStrip';
+import { OpponentSheet, OpponentStrip } from '@/components/OpponentStrip';
 import { GameOverPanel, RoundSummary } from '@/components/Overlays';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
 import { cue, initAudio, isMuted, setMuted } from '@/lib/client/feedback';
 import { useGame } from '@/lib/client/useGame';
+import { heldSummary, lastMove } from '@/lib/skyjo';
 import type { GameView } from '@/lib/skyjo';
 
 /** Ce que le joueur doit faire, là, maintenant. */
@@ -52,6 +53,7 @@ export function GameClient({ code }: { code: string }) {
   const [muted, setMutedState] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [inspecting, setInspecting] = useState<string | null>(null);
 
   // Préférence de son lue dans le navigateur, donc après le montage.
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -106,6 +108,10 @@ export function GameClient({ code }: { code: string }) {
   const opponents = view.players.filter((p) => p.id !== view.you.id);
   const legal = new Set(view.legalActions);
   const myTurn = view.currentPlayerId === view.you.id;
+  const move = lastMove(view);
+  const held = heldSummary(view);
+  // Résolu au rendu : un joueur qui quitte referme sa fiche de lui-même.
+  const inspected = opponents.find((p) => p.id === inspecting) ?? null;
 
   const isTarget = (index: number) => {
     if (!me) return false;
@@ -169,8 +175,7 @@ export function GameClient({ code }: { code: string }) {
         <Lobby view={view} onStart={() => void run({ type: 'startGame' })} busy={busy} />
       ) : (
         <>
-          {/* Les adversaires tiennent une ligne : le reste appartient à ma grille. */}
-          <OpponentStrip view={view} opponents={opponents} />
+          <OpponentStrip view={view} opponents={opponents} move={move} onOpen={setInspecting} />
 
           {me && (
             <MyBoard
@@ -191,7 +196,7 @@ export function GameClient({ code }: { code: string }) {
             discardTop={view.discardTop}
             heldCard={view.heldCard}
             heldFrom={view.heldFrom}
-            heldByMe={myTurn}
+            heldNote={held?.text ?? null}
             canDraw={legal.has('drawFromPile')}
             canTakeDiscard={legal.has('takeDiscard')}
             canDiscardHeld={legal.has('discardHeld')}
@@ -201,6 +206,24 @@ export function GameClient({ code }: { code: string }) {
           />
         </>
       )}
+
+      {/* Mon tour : un liseré qui respire sur tout le pourtour. Il ne masque
+          rien et ne se rate pas, même le téléphone posé à côté de l'assiette. */}
+      {myTurn && view.phase === 'playing' && (
+        <div className="turn-glow pointer-events-none fixed inset-0 z-30" aria-hidden />
+      )}
+
+      <AnimatePresence>
+        {inspected && (
+          <OpponentSheet
+            player={inspected}
+            active={inspected.id === view.currentPlayerId}
+            closer={inspected.id === view.roundCloserId}
+            target={view.targetScore}
+            onClose={() => setInspecting(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {view.phase === 'roundOver' && (

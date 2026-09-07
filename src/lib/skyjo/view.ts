@@ -43,7 +43,11 @@ export interface GameView {
   drawPileCount: number;
   discardTop: number | null;
   discardCount: number;
-  /** Carte en main : visible uniquement par le joueur actif (comme sur la table). */
+  /**
+   * Carte en main. Visible de tous si elle vient de la défausse — sur une vraie
+   * table, tout le monde a vu quelle carte le joueur y a prise. Secrète si elle
+   * vient de la pioche, jusqu'à ce qu'elle soit posée ou jetée.
+   */
   heldCard: number | null;
   heldFrom: 'draw' | 'discard' | null;
   roundCloserId: string | null;
@@ -97,7 +101,7 @@ export function toView(state: GameState, viewerId: string): GameView {
     drawPileCount: state.drawPile.length,
     discardTop: state.discardPile.at(-1) ?? null,
     discardCount: state.discardPile.length,
-    heldCard: isCurrent ? state.heldCard : null,
+    heldCard: isCurrent || state.heldFrom === 'discard' ? state.heldCard : null,
     heldFrom: state.heldFrom,
     roundCloserId: state.roundCloserId,
     finalTurnsLeft: state.finalTurnsLeft,

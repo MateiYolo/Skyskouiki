@@ -110,7 +110,8 @@ export function EventLayer({ view }: { view: GameView }) {
       }
     }
 
-    // Changement de tour : une petite alerte pour celui qui doit jouer.
+    // Changement de tour. On peut avoir posé le téléphone : le son et la
+    // vibration ne suffisent pas, il faut aussi que l'écran le dise en grand.
     if (
       !firstRender &&
       view.currentPlayerId !== lastCurrent.current &&
@@ -118,6 +119,8 @@ export function EventLayer({ view }: { view: GameView }) {
       view.phase === 'playing'
     ) {
       cue('yourTurn');
+      // Une fermeture de manche mérite mieux qu'un « à toi » : on ne l'écrase pas.
+      freshHero ??= { id: nextId++, title: 'À TOI !', subtitle: 'À ton tour de jouer', tone: 'good' };
     }
     lastCurrent.current = view.currentPlayerId;
 
@@ -140,6 +143,16 @@ export function EventLayer({ view }: { view: GameView }) {
     const timer = setTimeout(() => setHero(null), 1500);
     return () => clearTimeout(timer);
   }, [hero]);
+
+  // Le titre de l'onglet : sur un autre onglet ou l'écran verrouillé, c'est le
+  // seul endroit où l'on peut encore apprendre que c'est à soi.
+  const myTurn = view.phase === 'playing' && view.currentPlayerId === view.you.id;
+  useEffect(() => {
+    document.title = myTurn ? '▶ À toi ! · Skyskouiki' : 'Skyskouiki';
+    return () => {
+      document.title = 'Skyskouiki';
+    };
+  }, [myTurn]);
 
   return (
     <>

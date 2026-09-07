@@ -145,6 +145,8 @@ export function PlayingCard({
     layoutId,
     className: [
       'relative block aspect-[3/4] w-full [perspective:900px]',
+      // La pastille déborde du coin : sans ça, la carte voisine la recouvre.
+      badge ? 'z-20' : '',
       interactive ? 'cursor-pointer' : '',
       dimmed ? 'opacity-40' : '',
       className,

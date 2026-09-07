@@ -43,7 +43,7 @@ export function MyBoard({ view, me, myTurn, isTarget, onCell }: MyBoardProps) {
   };
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-[26rem] flex-1 flex-col px-3 pt-1">
+    <div className="board-cap mx-auto flex min-h-0 w-full max-w-[26rem] flex-[5] flex-col px-3 pt-1">
       <div className="mb-1.5 flex shrink-0 items-center gap-2">
         <Avatar player={me} active={myTurn} size="sm" />
         <div className="min-w-0 flex-1">
