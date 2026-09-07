@@ -45,6 +45,13 @@ export function useGame(code: string, playerId: string | null) {
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
+  // Un rafraîchissement demandé pendant qu'un autre est en vol ne doit pas être
+  // jeté : sinon la version que porte cette notification n'arrive jamais, et le
+  // coup de l'adversaire — une colonne éliminée, une carte piochée — se joue
+  // dans le dos de l'autre écran.
+  const refreshAgain = useRef(false);
+  // Dernière version reçue : le serveur s'en sert pour rejouer ce qu'on a raté.
+  const lastVersion = useRef(0);
   // Cases en train de se retourner sous le doigt, en attendant leur valeur.
   const [revealing, setRevealing] = useState<readonly number[]>([]);
   // Un rafraîchissement parti avant l'action ne doit pas revenir écraser la
@@ -54,21 +61,35 @@ export function useGame(code: string, playerId: string | null) {
   // n'en verra jamais deux à la fois sur un état qui n'existe déjà plus.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
 
-  const refresh = useCallback(async () => {
-    if (!playerId || inFlight.current) return;
+  const refresh = useCallback(async (): Promise<void> => {
+    if (!playerId) return;
+    // Occupé : on note qu'il faudra recommencer, et le tour en cours s'en charge.
+    if (inFlight.current) {
+      refreshAgain.current = true;
+      return;
+    }
     inFlight.current = true;
     try {
-      const res = await fetch(`/api/games/${code}?playerId=${encodeURIComponent(playerId)}`, {
-        cache: 'no-store',
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        setState({ view: null, loading: false, error: body.error ?? 'Partie introuvable.' });
-        return;
-      }
-      // Une action est partie entre-temps : sa réponse fera foi, pas celle-ci.
-      if (pending.current > 0) return;
-      setState({ view: body as GameView, loading: false, error: null });
+      // Tant qu'une notification est tombée pendant la requête, on refait un
+      // tour : c'est la seule façon de ne pas laisser filer une version.
+      do {
+        refreshAgain.current = false;
+        const since = lastVersion.current;
+        const res = await fetch(
+          `/api/games/${code}?playerId=${encodeURIComponent(playerId)}${since ? `&since=${since}` : ''}`,
+          { cache: 'no-store' },
+        );
+        const body = await res.json();
+        if (!res.ok) {
+          setState({ view: null, loading: false, error: body.error ?? 'Partie introuvable.' });
+          return;
+        }
+        // Une action est partie entre-temps : sa réponse fera foi, pas celle-ci.
+        if (pending.current > 0) return;
+        const view = body as GameView;
+        lastVersion.current = view.version;
+        setState({ view, loading: false, error: null });
+      } while (refreshAgain.current);
     } catch {
       setState((s) => ({ ...s, loading: false, error: 'Connexion perdue.' }));
     } finally {
@@ -118,7 +139,9 @@ export function useGame(code: string, playerId: string | null) {
             return body.error ?? 'Action refusée.';
           }
           if (pending.current === 0) {
-            setState({ view: body as GameView, loading: false, error: null });
+            const view = body as GameView;
+            lastVersion.current = view.version;
+            setState({ view, loading: false, error: null });
           }
           return null;
         } catch {
@@ -131,6 +154,16 @@ export function useGame(code: string, playerId: string | null) {
         }
       };
 
+      /**
+       * Deux retournements de début de manche ne dépendent pas l'un de l'autre :
+       * les faire attendre leur tour, c'est faire payer au joueur deux
+       * aller-retours au lieu d'un. Le serveur les traite sous verrou optimiste
+       * et rejoue celui qui arrive sur une version périmée, donc il n'y a rien à
+       * protéger ici. Tout le reste s'enchaîne — jeter puis retourner, poser
+       * après avoir pioché : ces coups-là n'existent que dans l'ordre.
+       */
+      if (action.type === 'flipInitial') return send();
+
       const run = queue.current.then(send, send);
       queue.current = run;
       return run;
@@ -140,7 +173,6 @@ export function useGame(code: string, playerId: string | null) {
 
   useEffect(() => {
     // Première synchronisation avec le serveur : c'est bien un effet de bord.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);
 

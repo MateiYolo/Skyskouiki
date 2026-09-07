@@ -169,7 +169,12 @@ export function EventLayer({ view }: { view: GameView }) {
     // pas — les deux grilles, elles, restent entièrement lisibles pendant
     // qu'une annonce explique ce qui vient de s'y passer.
     <div className="safe-top pointer-events-none fixed inset-x-0 top-0 z-40 flex flex-col items-center gap-1.5 px-4">
-      <AnimatePresence>
+      {/* `popLayout` sort l'annonce précédente du flux pendant qu'elle s'efface.
+          Sans lui, ses 340 ms de sortie occupaient encore la place et poussaient
+          la suivante vers le bas : sur une série de coups rapides, l'annonce
+          descendait jusqu'au milieu des grilles au lieu de rester où l'œil
+          l'attend. */}
+      <AnimatePresence mode="popLayout">
         {hero && (
           <motion.div
             key={hero.id}
@@ -199,7 +204,7 @@ export function EventLayer({ view }: { view: GameView }) {
         )}
       </AnimatePresence>
 
-      <AnimatePresence initial={false}>
+      <AnimatePresence initial={false} mode="popLayout">
         {toasts.map((toast) => (
           <motion.div
             key={toast.id}

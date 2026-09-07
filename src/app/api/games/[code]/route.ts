@@ -12,9 +12,13 @@ type Context = { params: Promise<{ code: string }> };
 export async function GET(request: Request, ctx: Context) {
   try {
     const { code } = await ctx.params;
-    const playerId = new URL(request.url).searchParams.get('playerId');
+    const params = new URL(request.url).searchParams;
+    const playerId = params.get('playerId');
     if (!playerId) throw new GameError('Joueur non identifié.', 400);
-    return ok(await getView(code, playerId));
+    // Dernière version connue du client : sert à lui rejouer les coups qu'il a
+    // ratés, pas à lui en montrer davantage.
+    const since = Number(params.get('since'));
+    return ok(await getView(code, playerId, Number.isSafeInteger(since) && since > 0 ? since : undefined));
   } catch (error) {
     return fail(error);
   }

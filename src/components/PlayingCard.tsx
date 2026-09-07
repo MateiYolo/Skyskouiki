@@ -92,6 +92,8 @@ export function PlayingCard({
   'aria-label': ariaLabel,
   'data-anchor': anchor,
 }: PlayingCardProps) {
+  // Retournée sans valeur : le serveur n'a pas encore répondu.
+  const awaiting = faceUp && value === null;
   const tone = TONES[value === null ? (faceUp ? 'blank' : 'navy') : toneOf(value)];
   const interactive = !!onClick;
   const ring = INTENT_CLASS[intent];
@@ -108,8 +110,9 @@ export function PlayingCard({
         {/* Recto : la valeur */}
         <div
           className={[
-            'card-face absolute inset-0 flex items-center justify-center [backface-visibility:hidden]',
+            'card-face absolute inset-0 flex items-center justify-center overflow-hidden [backface-visibility:hidden]',
             RADIUS[size],
+            awaiting ? 'card-awaiting' : '',
             ring,
           ].join(' ')}
           style={{

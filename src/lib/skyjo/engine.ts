@@ -59,6 +59,7 @@ export function createGame(opts: CreateGameOptions): GameState {
     targetScore: opts.targetScore ?? DEFAULT_TARGET_SCORE,
     seed: opts.seed ?? (Math.floor(Math.random() * 0xffffffff) | 0),
     lastEvents: [],
+    eventLog: [],
     lastRoundScores: null,
     winnerId: null,
     createdAt: now,
@@ -82,6 +83,9 @@ function makePlayer(p: { id: string; name: string; emoji: string }): Player {
 // Réducteur
 // ---------------------------------------------------------------------------
 
+/** Combien de coups le journal d'événements retient, pour rattraper un retard. */
+const EVENT_LOG_SIZE = 24;
+
 const fail = (error: string): ActionResult => ({ ok: false, error });
 
 /**
@@ -96,6 +100,12 @@ export function applyAction(input: GameState, action: Action): ActionResult {
   const commit = (): ActionResult => {
     s.version = input.version + 1;
     s.updatedAt = Date.now();
+    // Le journal garde de quoi rattraper un client qui a sauté des versions.
+    // Vingt-quatre lots couvrent largement une déconnexion passagère ; au-delà,
+    // l'état lui-même suffit — il n'y a plus d'animation à rejouer.
+    if (events.length) {
+      s.eventLog = [...(input.eventLog ?? []), { version: s.version, events }].slice(-EVENT_LOG_SIZE);
+    }
     return { ok: true, state: s };
   };
 

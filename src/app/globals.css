@@ -108,6 +108,27 @@ button,
    Animations récurrentes
    -------------------------------------------------------------------------- */
 
+/* Une carte retournée dont la valeur n'est pas encore arrivée du serveur. Le
+   balayage n'est pas un ornement : sans lui, un rectangle uni immobile pendant
+   le temps d'un aller-retour se lit comme une panne, pas comme une attente. Il
+   disparaît dès que le chiffre est là. */
+@keyframes awaiting {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+.card-awaiting::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.16) 50%, transparent 70%);
+  animation: awaiting 1.15s ease-in-out infinite;
+}
+
 /* Le seul liseré qui reste : « c'est une de ces cases-là qu'il faut toucher ».
    Il ne s'affiche que quand il désigne un sous-ensemble — entourer les douze
    cases d'une grille où tout est posable ne fait qu'ajouter du jaune à lire. */
