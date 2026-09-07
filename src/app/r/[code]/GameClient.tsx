@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useState } from 'react';
-import { ActionDock } from '@/components/ActionDock';
+
 import { EventLayer } from '@/components/EventLayer';
 import { FlightLayer } from '@/components/FlightLayer';
 import { MyBoard } from '@/components/MyBoard';
 import { OpponentSheet, OpponentStrip } from '@/components/OpponentStrip';
+import { TableCenter } from '@/components/TableCenter';
 import { GameOverPanel, RoundSummary } from '@/components/Overlays';
 import { useMoveEcho } from '@/lib/client/echo';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
@@ -201,23 +202,9 @@ export function GameClient({ code }: { code: string }) {
             onOpen={setInspecting}
           />
 
-          {me && (
-            <MyBoard
-              view={view}
-              me={me}
-              myTurn={myTurn}
-              isTarget={isTarget}
-              markTargets={markTargets}
-              onCell={onCell}
-              touched={echo?.touched[view.you.id] ?? null}
-              cleared={echo?.cleared[view.you.id] ?? null}
-              echoKey={echo?.version ?? 0}
-              revealing={revealing}
-            />
-          )}
-
-          {/* Consigne et piles réunies en bas, à portée de pouce. */}
-          <ActionDock
+          {/* Les piles au milieu, entre les deux grilles : une carte qui monte
+              part chez l'adversaire, une carte qui descend arrive chez moi. */}
+          <TableCenter
             title={title}
             hint={hint}
             emphasis={myTurn || view.phase === 'initialFlip'}
@@ -233,6 +220,21 @@ export function GameClient({ code }: { code: string }) {
             onTakeDiscard={() => void run({ type: 'takeDiscard' })}
             onDiscardHeld={() => void run({ type: 'discardHeld' })}
           />
+
+          {me && (
+            <MyBoard
+              view={view}
+              me={me}
+              myTurn={myTurn}
+              isTarget={isTarget}
+              markTargets={markTargets}
+              onCell={onCell}
+              touched={echo?.touched[view.you.id] ?? null}
+              cleared={echo?.cleared[view.you.id] ?? null}
+              echoKey={echo?.version ?? 0}
+              revealing={revealing}
+            />
+          )}
         </>
       )}
 
