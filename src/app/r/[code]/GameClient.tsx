@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useState } from 'react';
+import { ActionDock } from '@/components/ActionDock';
 import { EventLayer } from '@/components/EventLayer';
+import { MyBoard } from '@/components/MyBoard';
+import { OpponentStrip } from '@/components/OpponentStrip';
 import { GameOverPanel, RoundSummary } from '@/components/Overlays';
-import { Avatar, PlayerPanel } from '@/components/PlayerPanel';
-import { PlayerGrid } from '@/components/PlayerGrid';
-import { TableCenter } from '@/components/TableCenter';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
 import { cue, initAudio, isMuted, setMuted } from '@/lib/client/feedback';
 import { useGame } from '@/lib/client/useGame';
@@ -169,84 +169,36 @@ export function GameClient({ code }: { code: string }) {
         <Lobby view={view} onStart={() => void run({ type: 'startGame' })} busy={busy} />
       ) : (
         <>
-          {/* Adversaires */}
-          <div
-            className={`flex gap-2 overflow-x-auto px-4 pb-1 ${opponents.length <= 2 ? 'justify-center' : ''}`}
-          >
-            {opponents.map((player) => (
-              <PlayerPanel
-                key={player.id}
-                player={player}
-                active={player.id === view.currentPlayerId}
-                target={view.targetScore}
-                closer={player.id === view.roundCloserId}
-              />
-            ))}
-          </div>
+          {/* Les adversaires tiennent une ligne : le reste appartient à ma grille. */}
+          <OpponentStrip view={view} opponents={opponents} />
 
-          {/* Table */}
-          <div className="shrink-0 py-2">
-            <TableCenter
-              drawPileCount={view.drawPileCount}
-              discardTop={view.discardTop}
-              heldCard={view.heldCard}
-              heldFrom={view.heldFrom}
-              heldByMe={myTurn}
-              canDraw={legal.has('drawFromPile')}
-              canTakeDiscard={legal.has('takeDiscard')}
-              canDiscardHeld={legal.has('discardHeld')}
-              onDraw={() => void run({ type: 'drawFromPile' })}
-              onTakeDiscard={() => void run({ type: 'takeDiscard' })}
-              onDiscardHeld={() => void run({ type: 'discardHeld' })}
-            />
-          </div>
-
-          {/* Consigne */}
-          <div className="shrink-0 px-4 text-center">
-            <motion.div
-              key={title}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`text-base font-bold ${myTurn || view.phase === 'initialFlip' ? 'text-accent' : 'text-ink-dim'}`}
-            >
-              {title}
-            </motion.div>
-            <div className="mt-0.5 text-[0.72rem] text-ink-faint">{hint}</div>
-          </div>
-
-          {/* Ma zone */}
           {me && (
-            <div className="safe-bottom mx-auto flex min-h-0 w-full max-w-[24rem] flex-1 flex-col px-4 pt-2">
-              <div className="mb-1.5 flex shrink-0 items-center gap-2">
-                <Avatar player={me} active={myTurn} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold">{me.name}</div>
-                  <div className="tnum text-[0.68rem] text-ink-dim">
-                    {me.totalScore} pts · visible {me.visibleSum}
-                    {me.faceDownCount > 0 && ` · ${me.faceDownCount} cachées`}
-                  </div>
-                </div>
-                {view.roundCloserId === view.you.id && (
-                  <span className="rounded-full bg-danger/20 px-2 py-0.5 text-[0.62rem] font-bold text-danger">
-                    tu as fermé
-                  </span>
-                )}
-              </div>
-              {/* Une grille 4×3 de cartes 3:4 est carrée : contraindre la hauteur
-                  suffit donc à la faire tenir sur n'importe quel téléphone. */}
-              <div className="flex min-h-0 flex-1 justify-center">
-                <div className="aspect-square h-full max-h-full max-w-full" data-testid="my-grid">
-                  <PlayerGrid
-                    grid={me.grid}
-                    size="lg"
-                    isTarget={isTarget}
-                    onCell={onCell}
-                    layoutKey="me"
-                  />
-                </div>
-              </div>
-            </div>
+            <MyBoard
+              view={view}
+              me={me}
+              myTurn={myTurn}
+              isTarget={isTarget}
+              onCell={onCell}
+            />
           )}
+
+          {/* Consigne et piles réunies en bas, à portée de pouce. */}
+          <ActionDock
+            title={title}
+            hint={hint}
+            emphasis={myTurn || view.phase === 'initialFlip'}
+            drawPileCount={view.drawPileCount}
+            discardTop={view.discardTop}
+            heldCard={view.heldCard}
+            heldFrom={view.heldFrom}
+            heldByMe={myTurn}
+            canDraw={legal.has('drawFromPile')}
+            canTakeDiscard={legal.has('takeDiscard')}
+            canDiscardHeld={legal.has('discardHeld')}
+            onDraw={() => void run({ type: 'drawFromPile' })}
+            onTakeDiscard={() => void run({ type: 'takeDiscard' })}
+            onDiscardHeld={() => void run({ type: 'discardHeld' })}
+          />
         </>
       )}
 

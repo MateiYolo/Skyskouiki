@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 /**
  * Une carte Skyjo.
@@ -31,18 +31,28 @@ const TONES: Record<Tone, { from: string; to: string; ink: string; edge: string 
 
 export type CardSize = 'xs' | 'sm' | 'md' | 'lg';
 
-const NUMERAL: Record<CardSize, string> = {
-  xs: 'text-[0.7rem]',
-  sm: 'text-base',
-  md: 'text-2xl',
-  lg: 'text-[2rem]',
-};
-
 const RADIUS: Record<CardSize, string> = {
-  xs: 'rounded-[4px]',
+  xs: 'rounded-[3px]',
   sm: 'rounded-md',
   md: 'rounded-lg',
   lg: 'rounded-xl',
+};
+
+/**
+ * Pourquoi cette carte attire l'œil.
+ *
+ * `target` seul suffit quand tout est posable — mais pendant un échange, les
+ * douze cases sont légales et se valent visuellement alors qu'elles ne se
+ * valent pas du tout. `good` et `combo` remettent la hiérarchie que le joueur
+ * ferait de tête.
+ */
+export type CardIntent = 'none' | 'target' | 'good' | 'combo';
+
+const INTENT_CLASS: Record<CardIntent, string> = {
+  none: '',
+  target: 'is-target',
+  good: 'is-good',
+  combo: 'is-combo',
 };
 
 export interface PlayingCardProps {
@@ -50,49 +60,40 @@ export interface PlayingCardProps {
   value: number | null;
   faceUp: boolean;
   size?: CardSize;
-  /** Met la carte en avant : c'est une cible jouable. */
-  target?: boolean;
+  /** Met la carte en avant : c'est une cible jouable, et pourquoi. */
+  intent?: CardIntent;
   selected?: boolean;
   dimmed?: boolean;
   onClick?: () => void;
+  /** Coin supérieur droit : le solde d'un échange, un pictogramme de combo… */
+  badge?: ReactNode;
   className?: string;
   style?: CSSProperties;
   layoutId?: string;
+  'aria-label'?: string;
 }
 
 export function PlayingCard({
   value,
   faceUp,
   size = 'md',
-  target = false,
+  intent = 'none',
   selected = false,
   dimmed = false,
   onClick,
+  badge,
   className = '',
   style,
   layoutId,
+  'aria-label': ariaLabel,
 }: PlayingCardProps) {
   const tone = TONES[value === null ? 'navy' : toneOf(value)];
   const interactive = !!onClick;
+  const ring = INTENT_CLASS[intent];
+  const label = ariaLabel ?? (faceUp && value !== null ? `Carte ${value}` : 'Carte face cachée');
 
-  return (
-    <motion.button
-      type="button"
-      layoutId={layoutId}
-      disabled={!interactive}
-      onClick={onClick}
-      aria-label={faceUp && value !== null ? `Carte ${value}` : 'Carte face cachée'}
-      className={[
-        'relative block aspect-[3/4] w-full [perspective:900px]',
-        interactive ? 'cursor-pointer' : 'cursor-default',
-        dimmed ? 'opacity-45' : '',
-        className,
-      ].join(' ')}
-      style={style}
-      whileTap={interactive ? { scale: 0.93 } : undefined}
-      animate={{ scale: selected ? 1.06 : 1 }}
-      transition={{ type: 'spring', stiffness: 420, damping: 26 }}
-    >
+  const inner = (
+    <>
       <motion.div
         className="relative h-full w-full [transform-style:preserve-3d]"
         initial={false}
@@ -102,9 +103,9 @@ export function PlayingCard({
         {/* Recto : la valeur */}
         <div
           className={[
-            'absolute inset-0 flex items-center justify-center [backface-visibility:hidden]',
+            'card-face absolute inset-0 flex items-center justify-center [backface-visibility:hidden]',
             RADIUS[size],
-            target ? 'is-target' : '',
+            ring,
           ].join(' ')}
           style={{
             background: `linear-gradient(160deg, ${tone.from} 0%, ${tone.to} 100%)`,
@@ -112,17 +113,15 @@ export function PlayingCard({
             color: tone.ink,
           }}
         >
-          <span className={`tnum font-black leading-none tracking-tight ${NUMERAL[size]}`}>
-            {value}
-          </span>
+          <span className="tnum card-numeral font-black leading-none tracking-tight">{value}</span>
         </div>
 
         {/* Verso : le dos de carte */}
         <div
           className={[
-            'absolute inset-0 flex items-center justify-center [backface-visibility:hidden] [transform:rotateY(180deg)]',
+            'card-face absolute inset-0 flex items-center justify-center [backface-visibility:hidden] [transform:rotateY(180deg)]',
             RADIUS[size],
-            target ? 'is-target' : '',
+            ring,
           ].join(' ')}
           style={{
             background:
@@ -131,14 +130,45 @@ export function PlayingCard({
               'inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -2px 6px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.4)',
           }}
         >
-          <span
-            className={`${size === 'xs' ? 'text-[0.55rem]' : size === 'sm' ? 'text-xs' : 'text-lg'} opacity-60`}
-            aria-hidden
-          >
+          <span className="card-pip leading-none opacity-50" aria-hidden>
             ✦
           </span>
         </div>
       </motion.div>
+
+      {/* Hors du conteneur 3D : une pastille collée au dos partirait en miroir. */}
+      {badge}
+    </>
+  );
+
+  const shared = {
+    layoutId,
+    className: [
+      'relative block aspect-[3/4] w-full [perspective:900px]',
+      interactive ? 'cursor-pointer' : '',
+      dimmed ? 'opacity-40' : '',
+      className,
+    ].join(' '),
+    style,
+    animate: { scale: selected ? 1.06 : 1 },
+    transition: { type: 'spring', stiffness: 420, damping: 26 } as const,
+  };
+
+  // Une carte qu'on ne peut pas jouer n'est pas un bouton : les grilles adverses
+  // en alignent douze, et douze boutons désactivés encombrent autant le lecteur
+  // d'écran que le HTML — la vignette d'un adversaire est elle-même un bouton,
+  // qui n'a pas le droit d'en contenir.
+  if (!interactive) {
+    return (
+      <motion.div {...shared} role="img" aria-label={label}>
+        {inner}
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.button {...shared} type="button" onClick={onClick} aria-label={label} whileTap={{ scale: 0.93 }}>
+      {inner}
     </motion.button>
   );
 }
