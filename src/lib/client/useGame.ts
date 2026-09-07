@@ -2,13 +2,12 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Action, GameView } from '@/lib/skyjo';
+import type { GameView } from '@/lib/skyjo';
+import { flightsForAction, requestFlights } from './flights';
+import { optimisticView, revealingIndex } from './optimistic';
+import type { ClientAction } from './actions';
 
-/** Action sans son `playerId` : la route le réinjecte à partir de l'identité. */
-export type ClientAction =
-  | Omit<Extract<Action, { type: 'join' }>, 'playerId'>
-  | { type: Exclude<Action['type'], 'join' | 'flipInitial' | 'placeCard' | 'flipCard'> }
-  | { type: 'flipInitial' | 'placeCard' | 'flipCard'; index: number };
+export type { ClientAction };
 
 let browserClient: SupabaseClient | null | undefined;
 
@@ -46,6 +45,14 @@ export function useGame(code: string, playerId: string | null) {
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
+  // Cases en train de se retourner sous le doigt, en attendant leur valeur.
+  const [revealing, setRevealing] = useState<readonly number[]>([]);
+  // Un rafraîchissement parti avant l'action ne doit pas revenir écraser la
+  // vue optimiste par l'état d'avant : on ignore ce qui date d'avant l'envoi.
+  const pending = useRef(0);
+  // Les coups partent en file : le joueur peut enchaîner deux taps, le serveur
+  // n'en verra jamais deux à la fois sur un état qui n'existe déjà plus.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
 
   const refresh = useCallback(async () => {
     if (!playerId || inFlight.current) return;
@@ -59,6 +66,8 @@ export function useGame(code: string, playerId: string | null) {
         setState({ view: null, loading: false, error: body.error ?? 'Partie introuvable.' });
         return;
       }
+      // Une action est partie entre-temps : sa réponse fera foi, pas celle-ci.
+      if (pending.current > 0) return;
       setState({ view: body as GameView, loading: false, error: null });
     } catch {
       setState((s) => ({ ...s, loading: false, error: 'Connexion perdue.' }));
@@ -67,31 +76,66 @@ export function useGame(code: string, playerId: string | null) {
     }
   }, [code, playerId]);
 
-  /** Envoie une action. L'erreur renvoyée est une règle du jeu, pas un bug. */
+  /**
+   * Envoie une action, après l'avoir jouée localement.
+   *
+   * Le coup est appliqué à l'écran avant le premier octet réseau : c'est ce qui
+   * fait la différence entre une carte qui répond au doigt et une carte qui
+   * répond au ping. La réponse du serveur fait ensuite autorité — elle apporte
+   * les valeurs cachées et corrige au besoin. L'erreur renvoyée est une règle
+   * du jeu, pas un bug.
+   */
   const act = useCallback(
     async (action: ClientAction): Promise<string | null> => {
       if (!playerId) return 'Joueur non identifié.';
+
+      // L'affichage bouge maintenant. L'ordre compte : le vol se mesure sur la
+      // mise en page d'avant le coup.
+      if (view) requestFlights(flightsForAction(view, action, playerId));
+      setState((s) => {
+        const guess = s.view && optimisticView(s.view, action, playerId);
+        return guess ? { ...s, view: guess } : s;
+      });
+      const turning = revealingIndex(action);
+      if (turning !== null) setRevealing((r) => [...r, turning]);
+
+      pending.current += 1;
       setBusy(true);
-      try {
-        const res = await fetch(`/api/games/${code}`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ playerId, action }),
-        });
-        const body = await res.json();
-        if (!res.ok) {
+
+      // L'envoi, lui, attend son tour derrière le coup précédent.
+      const send = async (): Promise<string | null> => {
+        try {
+          const res = await fetch(`/api/games/${code}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ playerId, action }),
+          });
+          const body = await res.json();
+          pending.current -= 1;
+          if (!res.ok) {
+            // Le pari était mauvais : on reprend l'état réel avant d'expliquer.
+            void refresh();
+            return body.error ?? 'Action refusée.';
+          }
+          if (pending.current === 0) {
+            setState({ view: body as GameView, loading: false, error: null });
+          }
+          return null;
+        } catch {
+          pending.current -= 1;
           void refresh();
-          return body.error ?? 'Action refusée.';
+          return 'Connexion perdue.';
+        } finally {
+          if (turning !== null) setRevealing((r) => r.filter((i) => i !== turning));
+          if (pending.current === 0) setBusy(false);
         }
-        setState({ view: body as GameView, loading: false, error: null });
-        return null;
-      } catch {
-        return 'Connexion perdue.';
-      } finally {
-        setBusy(false);
-      }
+      };
+
+      const run = queue.current.then(send, send);
+      queue.current = run;
+      return run;
     },
-    [code, playerId, refresh],
+    [code, playerId, refresh, view],
   );
 
   useEffect(() => {
@@ -141,5 +185,5 @@ export function useGame(code: string, playerId: string | null) {
     [view, playerId],
   );
 
-  return { view, me, loading, error, busy, live, act, refresh };
+  return { view, me, loading, error, busy, live, revealing, act, refresh };
 }

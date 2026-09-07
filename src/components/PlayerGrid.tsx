@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import { EmptySlot, PlayingCard, type CardSize } from './PlayingCard';
-import { cellAnchor } from './FlightLayer';
+import { cellAnchor } from '@/lib/client/flights';
 import { SETTLE } from '@/lib/client/motion';
 import type { ViewCell } from '@/lib/skyjo';
 
@@ -47,6 +47,13 @@ export interface PlayerGridProps {
   cleared?: ClearEcho | null;
   /** Version de la partie : remonte les échos à chaque nouveau coup. */
   echoKey?: number;
+  /**
+   * Cases que le joueur vient de toucher et dont la valeur n'est pas encore
+   * arrivée : elles se retournent tout de suite et attendent sur une face
+   * neutre. Un tableau, parce qu'on peut en enchaîner deux plus vite que le
+   * serveur ne répond.
+   */
+  revealing?: readonly number[];
   /** Identifiant du joueur : nomme chaque case pour la couche de vol. */
   playerId?: string;
 }
@@ -92,6 +99,7 @@ export function PlayerGrid({
   touched = null,
   cleared = null,
   echoKey = 0,
+  revealing,
   playerId,
 }: PlayerGridProps) {
   const gap = size === 'xs' ? 'gap-[2px]' : size === 'sm' ? 'gap-1' : 'gap-1.5';
@@ -117,6 +125,7 @@ export function PlayerGrid({
         }
 
         const target = isTarget?.(index) ?? false;
+        const turning = revealing?.includes(index) ?? false;
         const label = cell.faceUp ? `Carte ${cell.value}` : 'Carte face cachée';
 
         return (
@@ -124,7 +133,7 @@ export function PlayerGrid({
             key={index}
             data-anchor={playerId ? cellAnchor(playerId, index) : undefined}
             value={cell.faceUp ? cell.value : null}
-            faceUp={cell.faceUp}
+            faceUp={cell.faceUp || turning}
             size={size}
             intent={target && markTargets ? 'target' : 'none'}
             overlay={touched === index ? <TouchedRing key={echoKey} radius={radius} /> : undefined}

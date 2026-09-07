@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'motion/react';
 import { PlayingCard } from './PlayingCard';
-import { DISCARD_PILE, DRAW_PILE, HAND } from './FlightLayer';
+import { DISCARD_PILE, DRAW_PILE, HAND } from '@/lib/client/flights';
 import { MOVE } from '@/lib/client/motion';
 
 /**

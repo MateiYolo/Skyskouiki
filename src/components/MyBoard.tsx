@@ -24,6 +24,8 @@ export interface MyBoardProps {
   touched: number | null;
   cleared: ClearEcho | null;
   echoKey: number;
+  /** Cases retournées sous le doigt, en attente de leur valeur. */
+  revealing: readonly number[];
 }
 
 export function MyBoard({
@@ -36,6 +38,7 @@ export function MyBoard({
   touched,
   cleared,
   echoKey,
+  revealing,
 }: MyBoardProps) {
   const flag =
     view.roundCloserId === view.you.id
@@ -76,6 +79,7 @@ export function MyBoard({
             touched={touched}
             cleared={cleared}
             echoKey={echoKey}
+            revealing={revealing}
             playerId={me.id}
           />
         </div>

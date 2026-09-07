@@ -12,7 +12,7 @@ import { MOVE, SNAP } from '@/lib/client/motion';
  * ce qui permet de lire une grille adverse d'un coup d'œil, sans lire un chiffre.
  */
 
-export type Tone = 'navy' | 'sky' | 'green' | 'yellow' | 'red';
+export type Tone = 'navy' | 'sky' | 'green' | 'yellow' | 'red' | 'blank';
 
 export function toneOf(value: number): Tone {
   if (value < 0) return 'navy';
@@ -28,6 +28,9 @@ const TONES: Record<Tone, { from: string; to: string; ink: string; edge: string 
   green: { from: '#6ed673', to: '#2f9138', ink: '#06280a', edge: '#a2eda6' },
   yellow: { from: '#ffdc5e', to: '#e0a908', ink: '#3d2b00', edge: '#ffeda1' },
   red: { from: '#ff7070', to: '#c22626', ink: '#ffffff', edge: '#ffa8a8' },
+  // Retournée, mais pas encore lue : la carte a bougé au doigt, sa valeur
+  // arrive du serveur. Une face neutre le dit sans rien inventer.
+  blank: { from: '#57497e', to: '#332a55', ink: '#ffffff', edge: '#7b6bab' },
 };
 
 export type CardSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -89,7 +92,7 @@ export function PlayingCard({
   'aria-label': ariaLabel,
   'data-anchor': anchor,
 }: PlayingCardProps) {
-  const tone = TONES[value === null ? 'navy' : toneOf(value)];
+  const tone = TONES[value === null ? (faceUp ? 'blank' : 'navy') : toneOf(value)];
   const interactive = !!onClick;
   const ring = INTENT_CLASS[intent];
   const label = ariaLabel ?? (faceUp && value !== null ? `Carte ${value}` : 'Carte face cachée');
@@ -113,6 +116,9 @@ export function PlayingCard({
             background: `linear-gradient(160deg, ${tone.from} 0%, ${tone.to} 100%)`,
             boxShadow: `inset 0 1px 0 ${tone.edge}, inset 0 -2px 6px rgb(0 0 0 / 0.28), 0 2px 6px rgb(0 0 0 / 0.4)`,
             color: tone.ink,
+            // La face neutre prend sa couleur quand la valeur arrive : le
+            // raccord se fait en fondu plutôt qu'en sautant d'un ton à l'autre.
+            transition: 'background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out)',
           }}
         >
           <span className="tnum card-numeral font-black leading-none tracking-tight">{value}</span>

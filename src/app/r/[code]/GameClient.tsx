@@ -51,7 +51,10 @@ function prompt(view: GameView): { title: string; hint: string } {
 
 export function GameClient({ code }: { code: string }) {
   const { identity, update, ready } = useIdentity();
-  const { view, me, loading, error, busy, live, act } = useGame(code, identity?.playerId ?? null);
+  const { view, me, loading, error, busy, live, revealing, act } = useGame(
+    code,
+    identity?.playerId ?? null,
+  );
   const echo = useMoveEcho(view);
   const [notice, setNotice] = useState<string | null>(null);
   const [muted, setMutedState] = useState(false);
@@ -121,7 +124,13 @@ export function GameClient({ code }: { code: string }) {
     if (!me) return false;
     const cell = me.grid[index];
     if (!cell) return false;
-    if (legal.has('flipInitial')) return !cell.faceUp;
+    // Une carte déjà partie en rotation n'attend plus rien de nous.
+    if (revealing.includes(index)) return false;
+    if (legal.has('flipInitial')) {
+      // Deux cartes, celles qui tournent déjà comprises : sans ce compte, un
+      // troisième tap partirait pour se faire refuser par le serveur.
+      return !cell.faceUp && me.faceUpCount + revealing.length < 2;
+    }
     if (legal.has('placeCard')) return true;
     if (legal.has('flipCard')) return !cell.faceUp;
     return false;
@@ -203,6 +212,7 @@ export function GameClient({ code }: { code: string }) {
               touched={echo?.touched[view.you.id] ?? null}
               cleared={echo?.cleared[view.you.id] ?? null}
               echoKey={echo?.version ?? 0}
+              revealing={revealing}
             />
           )}
 
