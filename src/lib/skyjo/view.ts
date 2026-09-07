@@ -69,10 +69,31 @@ function visibleSum(grid: readonly Cell[]): number {
 }
 
 /**
+ * Les événements qu'un client n'a pas encore vus.
+ *
+ * Sans `since`, on s'en tient au dernier coup — c'est ce dont a besoin celui
+ * qui vient de jouer. Avec, on lui rend tout ce qui s'est produit depuis la
+ * version qu'il connaît : deux coups tombés dans le même rafraîchissement
+ * doivent tous les deux s'animer chez l'autre joueur, sinon son adversaire
+ * élimine une colonne dans son dos.
+ */
+function eventsSince(state: GameState, since: number | undefined): GameEvent[] {
+  if (since === undefined || since >= state.version) return state.lastEvents;
+  const log = state.eventLog ?? [];
+  const missed = log.filter((batch) => batch.version > since).flatMap((batch) => batch.events);
+  // Journal trop court (ou partie d'avant son existence) : le dernier coup
+  // reste toujours mieux que rien.
+  return missed.length ? missed : state.lastEvents;
+}
+
+/**
  * Projette l'état serveur vers ce que `viewerId` a le droit de connaître.
  * C'est la seule forme qui doit transiter jusqu'au navigateur.
+ *
+ * `since` est la dernière version que ce client a vue : elle décide de ce qu'on
+ * lui rejoue en événements, jamais de ce qu'il a le droit de voir.
  */
-export function toView(state: GameState, viewerId: string): GameView {
+export function toView(state: GameState, viewerId: string, since?: number): GameView {
   const current = state.players[state.currentPlayerIndex] ?? null;
   const isCurrent = !!current && current.id === viewerId;
 
@@ -105,7 +126,7 @@ export function toView(state: GameState, viewerId: string): GameView {
     heldFrom: state.heldFrom,
     roundCloserId: state.roundCloserId,
     finalTurnsLeft: state.finalTurnsLeft,
-    lastEvents: state.lastEvents,
+    lastEvents: eventsSince(state, since),
     lastRoundScores: state.lastRoundScores,
     winnerId: state.winnerId,
     you: {

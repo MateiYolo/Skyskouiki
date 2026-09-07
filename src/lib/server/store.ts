@@ -154,11 +154,16 @@ export async function createRoom(host: PlayerIdentity): Promise<GameView> {
   throw new GameError('Impossible de générer un code de partie libre.', 500);
 }
 
-/** Renvoie la partie telle que ce joueur a le droit de la voir. */
-export async function getView(code: string, playerId: string): Promise<GameView> {
+/**
+ * Renvoie la partie telle que ce joueur a le droit de la voir.
+ *
+ * `since` est la dernière version qu'il connaît : elle ne change rien à ce
+ * qu'il voit, seulement aux coups qu'on lui rejoue en animation.
+ */
+export async function getView(code: string, playerId: string, since?: number): Promise<GameView> {
   const state = await db().load(code);
   if (!state) throw new GameError('Cette partie n’existe pas (ou plus).', 404);
-  return toView(state, playerId);
+  return toView(state, playerId, since);
 }
 
 /**

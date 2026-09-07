@@ -58,6 +58,12 @@ export type GameEvent =
   | { type: 'roundOver'; scores: RoundScore[] }
   | { type: 'gameOver'; winnerId: string };
 
+/** Un lot d'événements et la version de la partie qui l'a produit. */
+export interface EventBatch {
+  version: number;
+  events: GameEvent[];
+}
+
 export interface RoundScore {
   playerId: string;
   /** Somme des cartes restantes, avant pénalité. */
@@ -103,6 +109,18 @@ export interface GameState {
 
   /** Événements produits par la dernière action : consommés par l'UI pour les animations. */
   lastEvents: GameEvent[];
+  /**
+   * Les derniers lots d'événements, chacun avec la version qui l'a produit.
+   *
+   * Un client ne reçoit pas forcément toutes les versions : deux coups joués
+   * coup sur coup peuvent tomber dans un seul rafraîchissement, et le second
+   * effacerait le premier. Sans mémoire, la colonne que l'adversaire vient
+   * d'éliminer n'aurait tout simplement jamais été annoncée à l'autre écran.
+   * Le journal permet de demander « tout ce qui s'est passé depuis la version
+   * que je connais » — borné, parce qu'un client absent depuis longtemps n'a
+   * plus rien à rejouer.
+   */
+  eventLog: EventBatch[];
   lastRoundScores: RoundScore[] | null;
   winnerId: string | null;
   createdAt: number;
