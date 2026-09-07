@@ -1,16 +1,32 @@
 'use client';
 
-import { AnimatePresence, motion } from 'motion/react';
-import { EmptySlot, PlayingCard, type CardIntent, type CardSize } from './PlayingCard';
+import { motion } from 'motion/react';
+import { EmptySlot, PlayingCard, type CardSize } from './PlayingCard';
+import { cellAnchor } from '@/lib/client/flights';
+import { SETTLE } from '@/lib/client/motion';
 import type { ViewCell } from '@/lib/skyjo';
 
-/** Ce qu'on annonce sur une case avant que le joueur la touche. */
-export interface CellCue {
-  intent: CardIntent;
-  /** Solde du score si la carte tenue atterrit là. `null` = case cachée, donc inconnu. */
-  delta?: number | null;
-  /** Le placement fait sauter une colonne ou une ligne. */
-  combo?: boolean;
+/**
+ * La grille 4 × 3 d'un joueur — la mienne en grand, celle des autres en petit.
+ *
+ * Elle porte deux échos du dernier coup, et rien d'autre. Sans eux, une partie
+ * à distance est une suite d'états : la grille d'en face a changé, on ne sait
+ * ni où ni comment. Avec eux, on voit le coup se produire :
+ *
+ *   - `touched` cercle la case qui vient d'être jouée, puis s'efface ;
+ *   - `cleared` rejoue la disparition d'un groupe — les cartes sont déjà
+ *     parties de l'état, on les remontre une demi-seconde pour qu'on voie
+ *     *lesquelles* et *pourquoi*.
+ *
+ * `echoKey` (la version de la partie) sert de clé : chaque coup remonte des
+ * calques neufs, donc rejoue l'animation, même deux fois de suite au même
+ * endroit.
+ */
+
+/** Le groupe qui vient de sauter chez ce joueur. */
+export interface ClearEcho {
+  indices: number[];
+  value: number;
 }
 
 export interface PlayerGridProps {
@@ -18,40 +34,58 @@ export interface PlayerGridProps {
   size?: CardSize;
   /** Index sur lesquels le joueur peut agir maintenant. */
   isTarget?: (index: number) => boolean;
-  /** Ce qu'on annonce sur chaque case jouable. */
-  cueFor?: (index: number) => CellCue | null;
+  /**
+   * Entoure les cases jouables. À couper quand *toutes* le sont : un liseré
+   * partout ne désigne rien et rend la grille illisible au moment précis où il
+   * faut la lire.
+   */
+  markTargets?: boolean;
   onCell?: (index: number) => void;
-  /** Identifiant du joueur : sert aux transitions partagées entre la main et la grille. */
-  layoutKey?: string;
+  /** Case jouée au dernier coup. */
+  touched?: number | null;
+  /** Groupe éliminé au dernier coup. */
+  cleared?: ClearEcho | null;
+  /** Version de la partie : remonte les échos à chaque nouveau coup. */
+  echoKey?: number;
+  /**
+   * Cases que le joueur vient de toucher et dont la valeur n'est pas encore
+   * arrivée : elles se retournent tout de suite et attendent sur une face
+   * neutre. Un tableau, parce qu'on peut en enchaîner deux plus vite que le
+   * serveur ne répond.
+   */
+  revealing?: readonly number[];
+  /** Identifiant du joueur : nomme chaque case pour la couche de vol. */
+  playerId?: string;
 }
 
-/** Pastille de solde : « −7 » se lit plus vite que « tu passes de 9 à 2 ». */
-function DeltaBadge({ delta, combo }: { delta: number | null | undefined; combo?: boolean }) {
-  if (combo) {
-    return (
-      <span className="pointer-events-none absolute right-0.5 top-0.5 z-10 rounded-full bg-accent px-1.5 py-px text-[0.6rem] font-black leading-tight text-felt-900 shadow-lg">
-        ✦
-      </span>
-    );
-  }
-  // Une case cachée reste un pari : le dos de la carte le dit déjà, et huit
-  // pastilles « ? » n'ajouteraient que du bruit là où il faut lire vite.
-  if (delta === undefined || delta === null) return null;
-
+/** Le coup qui vient d'être joué : un liseré qui s'allume et s'éteint tout seul. */
+function TouchedRing({ radius }: { radius: string }) {
   return (
-    <span
-      className={[
-        // À l'intérieur de la carte, pas en débord : deux cases voisines ont la
-        // même profondeur, et une pastille qui dépassait passait sous la carte
-        // suivante — pile pendant l'échange, quand on la lit le plus.
-        'pointer-events-none tnum absolute right-0.5 top-0.5 z-10 rounded-full px-1.5 py-px text-[0.6rem] font-bold leading-tight shadow-lg',
-        // Un échange à somme nulle n'est ni une bonne ni une mauvaise idée :
-        // le peindre en rouge découragerait un coup parfaitement neutre.
-        delta < 0 ? 'bg-good text-felt-900' : delta === 0 ? 'bg-white/30 text-ink' : 'bg-danger text-white',
-      ].join(' ')}
+    <motion.span
+      className={`pointer-events-none absolute -inset-[3px] ${radius}`}
+      style={{ boxShadow: '0 0 0 2px var(--color-accent), 0 0 16px rgb(255 204 77 / 0.5)' }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: [0, 1, 1, 0] }}
+      transition={{ duration: 1.5, times: [0, 0.08, 0.55, 1], ease: 'linear' }}
+    />
+  );
+}
+
+/**
+ * Le groupe qui saute. La carte reste en place le temps qu'on l'identifie, puis
+ * s'en va vers le haut en se réduisant — le trou qu'elle laisse est déjà là,
+ * dessous.
+ */
+function ClearGhost({ value, size }: { value: number; size: CardSize }) {
+  return (
+    <motion.div
+      className="pointer-events-none absolute inset-0 z-10"
+      initial={{ opacity: 1, scale: 1, y: 0 }}
+      animate={{ opacity: 0, scale: 0.6, y: -14 }}
+      transition={{ ...SETTLE, delay: 0.35 }}
     >
-      {delta > 0 ? `+${delta}` : delta}
-    </span>
+      <PlayingCard value={value} faceUp size={size} intent="target" />
+    </motion.div>
   );
 }
 
@@ -60,44 +94,49 @@ export function PlayerGrid({
   grid,
   size = 'md',
   isTarget,
-  cueFor,
+  markTargets = true,
   onCell,
-  layoutKey,
+  touched = null,
+  cleared = null,
+  echoKey = 0,
+  revealing,
+  playerId,
 }: PlayerGridProps) {
   const gap = size === 'xs' ? 'gap-[2px]' : size === 'sm' ? 'gap-1' : 'gap-1.5';
+  const radius = size === 'xs' ? 'rounded-[4px]' : size === 'sm' ? 'rounded-lg' : 'rounded-xl';
+  const clearing = cleared ? new Set(cleared.indices) : null;
 
   return (
     <div className={`grid h-full grid-cols-4 grid-rows-3 ${gap}`}>
       {grid.map((cell, index) => {
         if (cell === null) {
           return (
-            <AnimatePresence key={index} mode="popLayout">
-              <motion.div
-                initial={{ scale: 1.25, opacity: 0.9 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-              >
-                <EmptySlot size={size} />
-              </motion.div>
-            </AnimatePresence>
+            <div
+              key={index}
+              data-anchor={playerId ? cellAnchor(playerId, index) : undefined}
+              className="relative"
+            >
+              <EmptySlot size={size} />
+              {clearing?.has(index) && (
+                <ClearGhost key={echoKey} value={cleared!.value} size={size} />
+              )}
+            </div>
           );
         }
 
         const target = isTarget?.(index) ?? false;
-        const cue = target ? (cueFor?.(index) ?? null) : null;
-        const label = cell.faceUp
-          ? `Carte ${cell.value}${cue?.delta != null ? `, échange ${cue.delta > 0 ? '+' : ''}${cue.delta} points` : ''}${cue?.combo ? ', complète un groupe' : ''}`
-          : `Carte face cachée${cue?.combo ? ', complète un groupe' : ''}`;
+        const turning = revealing?.includes(index) ?? false;
+        const label = cell.faceUp ? `Carte ${cell.value}` : 'Carte face cachée';
 
         return (
           <PlayingCard
             key={index}
-            layoutId={layoutKey ? `${layoutKey}-${index}` : undefined}
+            data-anchor={playerId ? cellAnchor(playerId, index) : undefined}
             value={cell.faceUp ? cell.value : null}
-            faceUp={cell.faceUp}
+            faceUp={cell.faceUp || turning}
             size={size}
-            intent={cue?.intent ?? (target ? 'target' : 'none')}
-            badge={cue ? <DeltaBadge delta={cue.delta} combo={cue.combo} /> : undefined}
+            intent={target && markTargets ? 'target' : 'none'}
+            overlay={touched === index ? <TouchedRing key={echoKey} radius={radius} /> : undefined}
             onClick={target && onCell ? () => onCell(index) : undefined}
             aria-label={label}
           />

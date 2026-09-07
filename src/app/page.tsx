@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { PlayingCard } from '@/components/PlayingCard';
+import { MOVE } from '@/lib/client/motion';
 import { CODE_LENGTH, cleanCode } from '@/lib/code';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
 import { cue, initAudio } from '@/lib/client/feedback';
@@ -19,9 +20,9 @@ function Fan() {
           key={value}
           className="w-14"
           style={{ marginLeft: i === 0 ? 0 : '-0.75rem', zIndex: i }}
-          initial={{ y: 40, opacity: 0, rotate: 0 }}
+          initial={{ y: 24, opacity: 0, rotate: 0 }}
           animate={{ y: 0, opacity: 1, rotate: (i - 2) * 8 }}
-          transition={{ delay: 0.06 * i, type: 'spring', stiffness: 220, damping: 18 }}
+          transition={{ ...MOVE, delay: 0.04 * i }}
         >
           <PlayingCard value={value} faceUp size="md" />
         </motion.div>

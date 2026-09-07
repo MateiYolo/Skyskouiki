@@ -1,8 +1,7 @@
 'use client';
 
 import { Avatar, ScoreTiles } from './PlayerPanel';
-import { PlayerGrid, type CellCue } from './PlayerGrid';
-import { placementHint } from '@/lib/skyjo';
+import { PlayerGrid, type ClearEcho } from './PlayerGrid';
 import type { GameView, ViewPlayer } from '@/lib/skyjo';
 
 /**
@@ -19,29 +18,28 @@ export interface MyBoardProps {
   myTurn: boolean;
   /** Vrai si le joueur peut agir sur cet index maintenant. */
   isTarget: (index: number) => boolean;
+  /** Faux quand *toutes* les cases sont jouables : entourer les douze n'apprend rien. */
+  markTargets: boolean;
   onCell: (index: number) => void;
+  touched: number | null;
+  cleared: ClearEcho | null;
+  echoKey: number;
+  /** Cases retournées sous le doigt, en attente de leur valeur. */
+  revealing: readonly number[];
 }
 
-export function MyBoard({ view, me, myTurn, isTarget, onCell }: MyBoardProps) {
-  const held = view.turnStep === 'holding' && view.you.isCurrent ? view.heldCard : null;
-
-  /**
-   * Pendant un échange, les douze cases sont légales : un liseré identique
-   * partout n'aide personne. On distingue ce que le joueur calculerait lui-même
-   * — le solde de l'échange, et le groupe qui saute — à partir des seules
-   * cartes qu'il voit déjà.
-   */
-  const cueFor = (index: number): CellCue | null => {
-    if (held === null) return null;
-    const hint = placementHint(me.grid, index, held);
-    if (!hint) return null;
-    if (hint.clears) return { intent: 'combo', combo: true };
-    return {
-      intent: hint.delta !== null && hint.delta < 0 ? 'good' : 'target',
-      delta: hint.delta,
-    };
-  };
-
+export function MyBoard({
+  view,
+  me,
+  myTurn,
+  isTarget,
+  markTargets,
+  onCell,
+  touched,
+  cleared,
+  echoKey,
+  revealing,
+}: MyBoardProps) {
   const flag =
     view.roundCloserId === view.you.id
       ? 'tu as fermé'
@@ -76,9 +74,13 @@ export function MyBoard({ view, me, myTurn, isTarget, onCell }: MyBoardProps) {
             grid={me.grid}
             size="lg"
             isTarget={isTarget}
-            cueFor={cueFor}
+            markTargets={markTargets}
             onCell={onCell}
-            layoutKey="me"
+            touched={touched}
+            cleared={cleared}
+            echoKey={echoKey}
+            revealing={revealing}
+            playerId={me.id}
           />
         </div>
       </div>

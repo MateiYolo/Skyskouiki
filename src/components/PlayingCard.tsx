@@ -2,6 +2,7 @@
 
 import { motion } from 'motion/react';
 import type { CSSProperties, ReactNode } from 'react';
+import { MOVE, SNAP } from '@/lib/client/motion';
 
 /**
  * Une carte Skyjo.
@@ -11,7 +12,7 @@ import type { CSSProperties, ReactNode } from 'react';
  * ce qui permet de lire une grille adverse d'un coup d'œil, sans lire un chiffre.
  */
 
-export type Tone = 'navy' | 'sky' | 'green' | 'yellow' | 'red';
+export type Tone = 'navy' | 'sky' | 'green' | 'yellow' | 'red' | 'blank';
 
 export function toneOf(value: number): Tone {
   if (value < 0) return 'navy';
@@ -27,6 +28,9 @@ const TONES: Record<Tone, { from: string; to: string; ink: string; edge: string 
   green: { from: '#6ed673', to: '#2f9138', ink: '#06280a', edge: '#a2eda6' },
   yellow: { from: '#ffdc5e', to: '#e0a908', ink: '#3d2b00', edge: '#ffeda1' },
   red: { from: '#ff7070', to: '#c22626', ink: '#ffffff', edge: '#ffa8a8' },
+  // Retournée, mais pas encore lue : la carte a bougé au doigt, sa valeur
+  // arrive du serveur. Une face neutre le dit sans rien inventer.
+  blank: { from: '#57497e', to: '#332a55', ink: '#ffffff', edge: '#7b6bab' },
 };
 
 export type CardSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -39,20 +43,17 @@ const RADIUS: Record<CardSize, string> = {
 };
 
 /**
- * Pourquoi cette carte attire l'œil.
+ * Un seul état d'appel : cette carte-ci attend d'être touchée.
  *
- * `target` seul suffit quand tout est posable — mais pendant un échange, les
- * douze cases sont légales et se valent visuellement alors qu'elles ne se
- * valent pas du tout. `good` et `combo` remettent la hiérarchie que le joueur
- * ferait de tête.
+ * Il n'y a pas d'échelle de « bon coup » : annoncer le solde d'un échange
+ * chiffre par chiffre transformait la grille en tableur, et le joueur lisait
+ * les pastilles au lieu de ses cartes. Le calcul lui revient — c'est le jeu.
  */
-export type CardIntent = 'none' | 'target' | 'good' | 'combo';
+export type CardIntent = 'none' | 'target';
 
 const INTENT_CLASS: Record<CardIntent, string> = {
   none: '',
   target: 'is-target',
-  good: 'is-good',
-  combo: 'is-combo',
 };
 
 export interface PlayingCardProps {
@@ -65,11 +66,14 @@ export interface PlayingCardProps {
   selected?: boolean;
   dimmed?: boolean;
   onClick?: () => void;
-  /** Coin supérieur droit, à l'intérieur de la carte : solde d'un échange, combo… */
-  badge?: ReactNode;
+  /** Calque posé par-dessus la carte : le liseré du coup qui vient d'être joué. */
+  overlay?: ReactNode;
+  /** Épouse son conteneur au lieu d'imposer son ratio : pour une carte en vol. */
+  fill?: boolean;
+  /** Emplacement nommé, mesuré par la couche de vol. */
+  'data-anchor'?: string;
   className?: string;
   style?: CSSProperties;
-  layoutId?: string;
   'aria-label'?: string;
 }
 
@@ -81,13 +85,14 @@ export function PlayingCard({
   selected = false,
   dimmed = false,
   onClick,
-  badge,
+  overlay,
+  fill = false,
   className = '',
   style,
-  layoutId,
   'aria-label': ariaLabel,
+  'data-anchor': anchor,
 }: PlayingCardProps) {
-  const tone = TONES[value === null ? 'navy' : toneOf(value)];
+  const tone = TONES[value === null ? (faceUp ? 'blank' : 'navy') : toneOf(value)];
   const interactive = !!onClick;
   const ring = INTENT_CLASS[intent];
   const label = ariaLabel ?? (faceUp && value !== null ? `Carte ${value}` : 'Carte face cachée');
@@ -98,7 +103,7 @@ export function PlayingCard({
         className="relative h-full w-full [transform-style:preserve-3d]"
         initial={false}
         animate={{ rotateY: faceUp ? 0 : 180 }}
-        transition={{ type: 'spring', stiffness: 220, damping: 22 }}
+        transition={MOVE}
       >
         {/* Recto : la valeur */}
         <div
@@ -111,6 +116,9 @@ export function PlayingCard({
             background: `linear-gradient(160deg, ${tone.from} 0%, ${tone.to} 100%)`,
             boxShadow: `inset 0 1px 0 ${tone.edge}, inset 0 -2px 6px rgb(0 0 0 / 0.28), 0 2px 6px rgb(0 0 0 / 0.4)`,
             color: tone.ink,
+            // La face neutre prend sa couleur quand la valeur arrive : le
+            // raccord se fait en fondu plutôt qu'en sautant d'un ton à l'autre.
+            transition: 'background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out)',
           }}
         >
           <span className="tnum card-numeral font-black leading-none tracking-tight">{value}</span>
@@ -136,22 +144,23 @@ export function PlayingCard({
         </div>
       </motion.div>
 
-      {/* Hors du conteneur 3D : une pastille collée au dos partirait en miroir. */}
-      {badge}
+      {/* Hors du conteneur 3D : un calque collé au dos partirait en miroir. */}
+      {overlay}
     </>
   );
 
   const shared = {
-    layoutId,
+    'data-anchor': anchor,
     className: [
-      'relative block aspect-[3/4] w-full [perspective:900px]',
+      'relative block [perspective:900px]',
+      fill ? 'h-full w-full' : 'aspect-[3/4] w-full',
       interactive ? 'cursor-pointer' : '',
       dimmed ? 'opacity-40' : '',
       className,
     ].join(' '),
     style,
-    animate: { scale: selected ? 1.06 : 1 },
-    transition: { type: 'spring', stiffness: 420, damping: 26 } as const,
+    animate: { scale: selected ? 1.04 : 1 },
+    transition: SNAP,
   };
 
   // Une carte qu'on ne peut pas jouer n'est pas un bouton : les grilles adverses
@@ -167,7 +176,7 @@ export function PlayingCard({
   }
 
   return (
-    <motion.button {...shared} type="button" onClick={onClick} aria-label={label} whileTap={{ scale: 0.93 }}>
+    <motion.button {...shared} type="button" onClick={onClick} aria-label={label} whileTap={{ scale: 0.96 }}>
       {inner}
     </motion.button>
   );
