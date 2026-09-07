@@ -37,7 +37,10 @@ export function OpponentStrip({ view, opponents, move, echo, onOpen }: Props) {
   return (
     <div
       className={[
-        'no-scrollbar flex min-h-0 max-h-[13rem] flex-[2] gap-2 overflow-x-auto px-3 pb-1',
+        // Trois parts contre cinq : la grille d'en face se lit autant que la
+        // mienne se joue, et sur un écran court elle ne doit pas fondre en
+        // vignette — d'où le plancher, qui la garde déchiffrable.
+        'no-scrollbar flex min-h-[7.5rem] max-h-[15rem] flex-[3] gap-2 overflow-x-auto px-3 pt-1',
         opponents.length > 3 ? 'fade-right' : 'justify-center',
       ].join(' ')}
     >
@@ -131,16 +134,22 @@ function OpponentPanel({ player, solo, active, closer, target, move, echo, onOpe
   const label = `Voir la grille de ${player.name} en grand — ${player.totalScore} points au total, ${player.visibleSum} sur la manche`;
 
   if (solo) {
+    // Face à face : exactement la disposition de ma propre grille, en miroir de
+    // l'autre côté du terrain — nom et scores en ligne, grille centrée dessous.
+    // Renvoyée à droite comme avant, elle se lisait comme un encart ; ici les
+    // deux jeux se comparent d'un coup d'œil, colonne pour colonne.
     return (
-      <button type="button" onClick={onOpen} aria-label={label} className={`${frame} w-full max-w-[26rem] items-stretch gap-2`}>
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-          {identity}
-          <ScoreMeter score={player.totalScore} target={target} />
-        </div>
-        {/* Carrée par la hauteur du panneau ; le garde-fou de largeur évite
-            qu'un écran très court et étroit ne la fasse déborder. */}
-        <div className="h-full max-w-[62%] shrink-0" style={{ aspectRatio: '1' }}>
-          <PlayerGrid grid={player.grid} size="sm" playerId={player.id} {...echoFor(player.id, echo)} />
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={label}
+        className={`${frame} w-full max-w-[26rem] flex-col`}
+      >
+        <div className="shrink-0">{identity}</div>
+        <div className="fit-box min-h-0 flex-1">
+          <div className="fit-square">
+            <PlayerGrid grid={player.grid} size="sm" playerId={player.id} {...echoFor(player.id, echo)} />
+          </div>
         </div>
       </button>
     );

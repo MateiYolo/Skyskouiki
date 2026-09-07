@@ -6,20 +6,24 @@ import { DISCARD_PILE, DRAW_PILE, HAND } from '@/lib/client/flights';
 import { MOVE } from '@/lib/client/motion';
 
 /**
- * Le bas de l'écran : la consigne, les deux piles, et la carte en main.
+ * Le milieu de la table : la consigne, les deux piles, et la carte en main.
  *
- * Deux principes, tous deux issus de parties réelles sur téléphone.
+ * Sa place n'est pas décorative. Les piles sont posées **entre les deux
+ * grilles** — celle d'en face au-dessus, la mienne en dessous — si bien que
+ * chaque carte qui bouge traverse le terrain dans une direction qui dit à qui
+ * elle appartient : elle monte vers l'adversaire, elle descend vers moi. C'est
+ * ce qui rend un coup compréhensible sans le lire ; en bas de l'écran, les deux
+ * trajets partaient du même coin et se ressemblaient.
  *
- * D'abord la place : c'est la moitié basse qu'un pouce atteint, donc c'est là
- * que vivent les boutons — la grille, qu'on lit autant qu'on la touche, garde
- * le haut et toute la surface restante.
+ * Le pouce n'y perd rien : les cibles les plus fréquentes restent la grille du
+ * bas, et le milieu d'un téléphone s'atteint aussi bien que son pied.
  *
- * Ensuite la stabilité : chaque emplacement a une hauteur fixe, occupée ou non.
+ * Reste la stabilité : chaque emplacement a une hauteur fixe, occupé ou non.
  * Prendre une carte ne doit pas pousser la grille sous le doigt qui vise déjà
  * la case suivante.
  */
 
-export interface ActionDockProps {
+export interface TableCenterProps {
   title: string;
   hint: string;
   emphasis: boolean;
@@ -50,7 +54,7 @@ function PileLabel({ children, accent = false }: { children: React.ReactNode; ac
   );
 }
 
-export function ActionDock({
+export function TableCenter({
   title,
   hint,
   emphasis,
@@ -65,7 +69,7 @@ export function ActionDock({
   onDraw,
   onTakeDiscard,
   onDiscardHeld,
-}: ActionDockProps) {
+}: TableCenterProps) {
   const holding = heldFrom !== null;
   /**
    * Jeter, c'est poser la carte sur la défausse — alors on rend la défausse
@@ -80,24 +84,26 @@ export function ActionDock({
   const heldVisible = heldCard !== null;
 
   return (
-    <div className="safe-bottom shrink-0 border-t border-white/8 bg-felt-900/60 px-4 pt-2 backdrop-blur-sm">
+    // Un bandeau bordé sur ses deux faces : le terrain commun se voit, et on
+    // sait de part et d'autre à qui appartient chaque moitié de l'écran.
+    <div className="shrink-0 border-y border-white/8 bg-white/[0.03] px-4 py-1">
       {/* Consigne : deux lignes réservées, pour que rien ne saute d'un tour à l'autre. */}
-      <div className="mb-1 flex h-[2.35rem] flex-col justify-center text-center">
+      <div className="mb-0.5 flex h-[2.1rem] flex-col justify-center text-center">
         <motion.div
           key={title}
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`text-[0.95rem] font-bold leading-tight ${emphasis ? 'text-accent' : 'text-ink-dim'}`}
+          className={`text-[0.9rem] font-bold leading-tight ${emphasis ? 'text-accent' : 'text-ink-dim'}`}
         >
           {title}
         </motion.div>
         <div className="text-[0.68rem] leading-tight text-ink-faint">{heldNote ?? hint}</div>
       </div>
 
-      <div className="flex items-end justify-center gap-5 pb-1">
+      <div className="flex items-end justify-center gap-4">
         {/* Pioche. Le nombre de cartes restantes n'y figure pas : il ne change
             aucune décision — la pioche se reconstitue quand elle s'épuise. */}
-        <div className="flex w-[3.8rem] flex-col items-center gap-1" data-testid="draw-pile">
+        <div className="flex w-[3.1rem] flex-col items-center gap-1" data-testid="draw-pile">
           {/* Une pile hors d'atteinte s'efface : on ne la confond pas avec un bouton. */}
           <div
             data-anchor={DRAW_PILE}
@@ -120,7 +126,7 @@ export function ActionDock({
         </div>
 
         {/* Carte en main : emplacement toujours présent, rempli ou non. */}
-        <div className="flex w-[4.8rem] flex-col items-center gap-1">
+        <div className="flex w-[3.7rem] flex-col items-center gap-1">
           <div data-anchor={HAND} className="relative aspect-[3/4] w-full">
             <AnimatePresence>
               {holding ? (
@@ -152,7 +158,7 @@ export function ActionDock({
 
           {/* Hauteur réservée en toutes circonstances : le bouton apparaît sans
               pousser les piles sous le doigt qui vise déjà. */}
-          <div className="flex h-[1.7rem] items-center">
+          <div className="flex h-[1.5rem] items-center">
             {canDiscardHeld ? (
               <button
                 type="button"
@@ -168,7 +174,7 @@ export function ActionDock({
         </div>
 
         {/* Défausse */}
-        <div className="flex w-[3.8rem] flex-col items-center gap-1" data-testid="discard-pile">
+        <div className="flex w-[3.1rem] flex-col items-center gap-1" data-testid="discard-pile">
           <div
             data-anchor={DISCARD_PILE}
             className={`relative w-full ${
