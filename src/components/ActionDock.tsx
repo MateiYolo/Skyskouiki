@@ -36,9 +36,13 @@ export interface ActionDockProps {
   onDiscardHeld: () => void;
 }
 
-function PileLabel({ children }: { children: React.ReactNode }) {
+function PileLabel({ children, accent = false }: { children: React.ReactNode; accent?: boolean }) {
   return (
-    <span className="whitespace-nowrap text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-ink-faint">
+    <span
+      className={`whitespace-nowrap text-[0.6rem] font-semibold uppercase tracking-[0.14em] ${
+        accent ? 'text-accent' : 'text-ink-faint'
+      }`}
+    >
       {children}
     </span>
   );
@@ -61,6 +65,13 @@ export function ActionDock({
   onDiscardHeld,
 }: ActionDockProps) {
   const holding = heldFrom !== null;
+  /**
+   * Jeter, c'est poser la carte sur la défausse — alors on rend la défausse
+   * elle-même touchable. C'est le geste de la vraie table, et la cible fait la
+   * taille d'une carte au lieu d'une pastille de dix pixels. Le petit bouton
+   * « Jeter » reste à côté pour qui cherche un mot plutôt qu'un endroit.
+   */
+  const throwHere = canDiscardHeld;
   // Le serveur ne descend la valeur que si le joueur a le droit de la connaître :
   // la sienne toujours, celle d'un adversaire seulement s'il l'a prise dans la
   // défausse — auquel cas tout le monde l'a vue passer.
@@ -86,7 +97,9 @@ export function ActionDock({
         <div className="flex w-[3.8rem] flex-col items-center gap-1" data-testid="draw-pile">
           {/* Une pile hors d'atteinte s'efface un peu : la défausse reste lisible,
               mais on ne la confond pas avec un bouton. */}
-          <div className={`relative w-full ${canDraw ? 'is-playable' : 'opacity-70'}`}>
+          <div
+            className={`relative w-full ${canDraw ? 'is-playable' : holding ? 'opacity-35' : 'opacity-70'}`}
+          >
             {/* Épaisseur du paquet : deux dos décalés sous le premier. */}
             <div className="pointer-events-none absolute inset-0 translate-x-[3px] translate-y-[3px] rounded-lg bg-black/40" />
             <div className="pointer-events-none absolute inset-0 translate-x-[1.5px] translate-y-[1.5px] rounded-lg bg-black/30" />
@@ -140,13 +153,14 @@ export function ActionDock({
             </AnimatePresence>
           </div>
 
-          {/* Même hauteur que les libellés des piles : le bouton ne décale rien. */}
-          <div className="flex h-[1.05rem] items-center">
+          {/* Hauteur réservée en toutes circonstances : le bouton apparaît sans
+              pousser les piles sous le doigt qui vise déjà. */}
+          <div className="flex h-[1.7rem] items-center">
             {canDiscardHeld ? (
               <button
                 type="button"
                 onClick={onDiscardHeld}
-                className="rounded-full border border-white/20 bg-white/12 px-2.5 py-0.5 text-[0.62rem] font-bold uppercase tracking-wide text-ink active:scale-95"
+                className="rounded-full border border-white/25 bg-white/12 px-3.5 py-1 text-[0.66rem] font-bold uppercase tracking-wide text-ink active:scale-95"
               >
                 Jeter
               </button>
@@ -158,22 +172,41 @@ export function ActionDock({
 
         {/* Défausse */}
         <div className="flex w-[3.8rem] flex-col items-center gap-1" data-testid="discard-pile">
-          <div className={`relative w-full ${canTakeDiscard ? 'is-playable' : 'opacity-70'}`}>
+          <div
+            className={`relative w-full ${
+              canTakeDiscard || throwHere ? 'is-playable' : holding ? 'opacity-50' : 'opacity-70'
+            }`}
+          >
             {discardTop === null ? (
-              <div className="aspect-[3/4] w-full rounded-lg border border-dashed border-white/12" />
+              throwHere ? (
+                <button
+                  type="button"
+                  onClick={onDiscardHeld}
+                  aria-label="Jeter la carte en main"
+                  className="is-target grid aspect-[3/4] w-full place-items-center rounded-lg border-2 border-dashed border-accent/70 text-lg text-accent active:scale-95"
+                >
+                  ↓
+                </button>
+              ) : (
+                <div className="aspect-[3/4] w-full rounded-lg border border-dashed border-white/12" />
+              )
             ) : (
               <PlayingCard
                 layoutId="discard-top"
                 value={discardTop}
                 faceUp
                 size="md"
-                intent={canTakeDiscard ? 'target' : 'none'}
-                onClick={canTakeDiscard ? onTakeDiscard : undefined}
-                aria-label={`Prendre la défausse — ${discardTop}`}
+                intent={canTakeDiscard || throwHere ? 'target' : 'none'}
+                onClick={canTakeDiscard ? onTakeDiscard : throwHere ? onDiscardHeld : undefined}
+                aria-label={
+                  throwHere
+                    ? 'Jeter la carte en main sur la défausse'
+                    : `Prendre la défausse — ${discardTop}`
+                }
               />
             )}
           </div>
-          <PileLabel>défausse</PileLabel>
+          <PileLabel accent={throwHere}>{throwHere ? 'jeter ici' : 'défausse'}</PileLabel>
         </div>
       </div>
     </div>

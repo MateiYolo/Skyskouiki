@@ -65,7 +65,7 @@ export interface PlayingCardProps {
   selected?: boolean;
   dimmed?: boolean;
   onClick?: () => void;
-  /** Coin supérieur droit : le solde d'un échange, un pictogramme de combo… */
+  /** Coin supérieur droit, à l'intérieur de la carte : solde d'un échange, combo… */
   badge?: ReactNode;
   className?: string;
   style?: CSSProperties;
@@ -145,8 +145,6 @@ export function PlayingCard({
     layoutId,
     className: [
       'relative block aspect-[3/4] w-full [perspective:900px]',
-      // La pastille déborde du coin : sans ça, la carte voisine la recouvre.
-      badge ? 'z-20' : '',
       interactive ? 'cursor-pointer' : '',
       dimmed ? 'opacity-40' : '',
       className,

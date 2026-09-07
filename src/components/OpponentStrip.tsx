@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { Avatar, ScoreMeter } from './PlayerPanel';
+import { Avatar, ScoreMeter, ScoreTiles } from './PlayerPanel';
 import { PlayerGrid } from './PlayerGrid';
 import type { GameView, LastMove, ViewPlayer } from '@/lib/skyjo';
 
@@ -71,13 +71,15 @@ function OpponentPanel({ player, solo, active, closer, target, move, onOpen }: P
         <Avatar player={player} active={active} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[0.72rem] font-semibold leading-tight">{player.name}</div>
-          {/* En colonne étroite la ligne passait à deux : on s'en tient au score,
+          {/* En colonne étroite la ligne passait à deux : on s'en tient au cumul,
               le nombre de dos se compte sur la grille juste en dessous. */}
-          <div className="tnum truncate text-[0.62rem] leading-tight text-ink-dim">
-            {player.totalScore} pts
-            {solo && ` · visible ${player.visibleSum} · ${player.faceDownCount} cachées`}
-          </div>
+          {!solo && (
+            <div className="tnum truncate text-[0.62rem] leading-tight text-ink-dim">
+              {player.totalScore} pts
+            </div>
+          )}
         </div>
+        {solo && <ScoreTiles round={player.visibleSum} total={player.totalScore} target={target} size="sm" />}
         {closer && (
           <span className="shrink-0 rounded-full bg-danger/20 px-1.5 py-px text-[0.55rem] font-bold text-danger">
             fermé
@@ -97,7 +99,7 @@ function OpponentPanel({ player, solo, active, closer, target, move, onOpen }: P
     active ? 'border-accent/60 bg-accent/10' : 'border-white/10 bg-white/[0.04]',
   ].join(' ');
 
-  const label = `Voir la grille de ${player.name} en grand — ${player.totalScore} points, ${player.faceDownCount} cartes cachées`;
+  const label = `Voir la grille de ${player.name} en grand — ${player.totalScore} points au total, ${player.visibleSum} sur la manche`;
 
   if (solo) {
     return (
@@ -166,10 +168,8 @@ export function OpponentSheet({
           <Avatar player={player} active={active} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-base font-bold">{player.name}</div>
-            <div className="tnum text-[0.72rem] text-ink-dim">
-              {player.totalScore} pts · visible {player.visibleSum} · {player.faceDownCount} cachées
-            </div>
           </div>
+          <ScoreTiles round={player.visibleSum} total={player.totalScore} target={target} />
           {closer && (
             <span className="rounded-full bg-danger/20 px-2 py-0.5 text-[0.62rem] font-bold text-danger">
               a fermé
