@@ -1,8 +1,10 @@
 'use client';
 
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Avatar, ScoreMeter, ScoreTiles } from './PlayerPanel';
 import { PlayerGrid } from './PlayerGrid';
+import { MOVE, SETTLE } from '@/lib/client/motion';
+import type { MoveEcho } from '@/lib/client/echo';
 import type { GameView, LastMove, ViewPlayer } from '@/lib/skyjo';
 
 /**
@@ -22,10 +24,11 @@ interface Props {
   view: GameView;
   opponents: ViewPlayer[];
   move: LastMove | null;
+  echo: MoveEcho | null;
   onOpen: (playerId: string) => void;
 }
 
-export function OpponentStrip({ view, opponents, move, onOpen }: Props) {
+export function OpponentStrip({ view, opponents, move, echo, onOpen }: Props) {
   // À deux — le cas de loin le plus fréquent — l'unique adversaire s'étale en
   // largeur : ses infos passent à gauche et toute la hauteur du panneau revient
   // à sa grille. À plusieurs, chacun reprend une colonne et la bande défile.
@@ -47,11 +50,21 @@ export function OpponentStrip({ view, opponents, move, onOpen }: Props) {
           closer={player.id === view.roundCloserId}
           target={view.targetScore}
           move={move?.playerId === player.id ? move.text : null}
+          echo={echo}
           onOpen={() => onOpen(player.id)}
         />
       ))}
     </div>
   );
+}
+
+/** Ce que la grille de ce joueur doit rejouer du dernier coup. */
+function echoFor(playerId: string, echo: MoveEcho | null) {
+  return {
+    touched: echo?.touched[playerId] ?? null,
+    cleared: echo?.cleared[playerId] ?? null,
+    echoKey: echo?.version ?? 0,
+  };
 }
 
 interface PanelProps {
@@ -61,10 +74,11 @@ interface PanelProps {
   closer: boolean;
   target: number;
   move: string | null;
+  echo: MoveEcho | null;
   onOpen: () => void;
 }
 
-function OpponentPanel({ player, solo, active, closer, target, move, onOpen }: PanelProps) {
+function OpponentPanel({ player, solo, active, closer, target, move, echo, onOpen }: PanelProps) {
   const identity = (
     <>
       <div className="flex items-center gap-1.5">
@@ -87,9 +101,24 @@ function OpponentPanel({ player, solo, active, closer, target, move, onOpen }: P
         )}
       </div>
 
-      {/* Hauteur réservée : le dernier coup apparaît sans pousser la grille. */}
-      <div className="h-[0.95rem] truncate text-[0.6rem] leading-[0.95rem] text-accent/85">
-        {move}
+      {/* Ce que l'autre vient de faire, en toutes lettres — c'est la moitié de
+          ce qu'on vient chercher sur sa grille. Hauteur réservée pour que
+          l'apparition de la phrase ne pousse pas les cartes. */}
+      <div className="flex h-[1.15rem] items-center">
+        <AnimatePresence mode="wait">
+          {move && (
+            <motion.span
+              key={`${echo?.version ?? 0}-${move}`}
+              className="truncate text-[0.72rem] font-semibold leading-tight text-accent"
+              initial={{ opacity: 0, y: 3 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={MOVE}
+            >
+              {move}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </div>
     </>
   );
@@ -111,7 +140,7 @@ function OpponentPanel({ player, solo, active, closer, target, move, onOpen }: P
         {/* Carrée par la hauteur du panneau ; le garde-fou de largeur évite
             qu'un écran très court et étroit ne la fasse déborder. */}
         <div className="h-full max-w-[62%] shrink-0" style={{ aspectRatio: '1' }}>
-          <PlayerGrid grid={player.grid} size="sm" />
+          <PlayerGrid grid={player.grid} size="sm" playerId={player.id} {...echoFor(player.id, echo)} />
         </div>
       </button>
     );
@@ -123,7 +152,7 @@ function OpponentPanel({ player, solo, active, closer, target, move, onOpen }: P
 
       <div className="fit-box min-h-0 flex-1">
         <div className="fit-square">
-          <PlayerGrid grid={player.grid} size="sm" />
+          <PlayerGrid grid={player.grid} size="sm" playerId={player.id} {...echoFor(player.id, echo)} />
         </div>
       </div>
 
@@ -158,10 +187,10 @@ export function OpponentSheet({
     >
       <motion.div
         className="safe-bottom w-full max-w-sm rounded-t-3xl border border-white/12 bg-felt-800/95 p-5 shadow-2xl sm:rounded-3xl"
-        initial={{ y: 60 }}
-        animate={{ y: 0 }}
-        exit={{ y: 60, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 24, opacity: 0 }}
+        transition={SETTLE}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center gap-3">

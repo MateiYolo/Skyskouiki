@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { Confetti } from './Confetti';
 import { ScoreMeter } from './PlayerPanel';
+import { MOVE, SETTLE } from '@/lib/client/motion';
 import type { GameView, RoundScore } from '@/lib/skyjo';
 
 /** Compteur qui monte : un score qui s'incrémente se regarde, un score affiché non. */
@@ -39,9 +40,9 @@ function Sheet({ children }: { children: React.ReactNode }) {
     >
       <motion.div
         className="safe-bottom w-full max-w-md rounded-t-3xl border border-white/12 bg-felt-800/95 p-5 shadow-2xl sm:rounded-3xl"
-        initial={{ y: 60, opacity: 0 }}
+        initial={{ y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+        transition={SETTLE}
       >
         {children}
       </motion.div>
@@ -62,9 +63,9 @@ function ScoreRows({ view, scores }: { view: GameView; scores: RoundScore[] }) {
         return (
           <motion.li
             key={score.playerId}
-            initial={{ opacity: 0, x: -14 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.12 * rank, type: 'spring', stiffness: 300, damping: 24 }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...MOVE, delay: 0.07 * rank }}
             className={[
               'flex items-center gap-3 rounded-2xl border px-3 py-2.5',
               isMe ? 'border-accent/40 bg-accent/10' : 'border-white/10 bg-white/[0.04]',
@@ -90,9 +91,9 @@ function ScoreRows({ view, scores }: { view: GameView; scores: RoundScore[] }) {
                 {score.doubled && (
                   <motion.span
                     className="rounded-md bg-danger/20 px-1.5 py-0.5 text-[0.62rem] font-bold text-danger"
-                    initial={{ scale: 0, rotate: -18 }}
-                    animate={{ scale: 1, rotate: -8 }}
-                    transition={{ delay: 0.3 + 0.12 * rank, type: 'spring', stiffness: 400, damping: 12 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ ...MOVE, delay: 0.25 + 0.07 * rank }}
                   >
                     ×2
                   </motion.span>
@@ -177,9 +178,9 @@ export function GameOverPanel({
         <div className="mb-4 text-center">
           <motion.div
             className="text-5xl"
-            initial={{ scale: 0.4, rotate: -20 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 12 }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={SETTLE}
             aria-hidden
           >
             {iWon ? '🏆' : winner?.emoji}

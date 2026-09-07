@@ -5,10 +5,13 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useState } from 'react';
 import { ActionDock } from '@/components/ActionDock';
 import { EventLayer } from '@/components/EventLayer';
+import { FlightLayer } from '@/components/FlightLayer';
 import { MyBoard } from '@/components/MyBoard';
 import { OpponentSheet, OpponentStrip } from '@/components/OpponentStrip';
 import { GameOverPanel, RoundSummary } from '@/components/Overlays';
+import { useMoveEcho } from '@/lib/client/echo';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
+import { MOVE } from '@/lib/client/motion';
 import { cue, initAudio, isMuted, setMuted } from '@/lib/client/feedback';
 import { useGame } from '@/lib/client/useGame';
 import { heldSummary, lastMove } from '@/lib/skyjo';
@@ -49,6 +52,7 @@ function prompt(view: GameView): { title: string; hint: string } {
 export function GameClient({ code }: { code: string }) {
   const { identity, update, ready } = useIdentity();
   const { view, me, loading, error, busy, live, act } = useGame(code, identity?.playerId ?? null);
+  const echo = useMoveEcho(view);
   const [notice, setNotice] = useState<string | null>(null);
   const [muted, setMutedState] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -123,6 +127,10 @@ export function GameClient({ code }: { code: string }) {
     return false;
   };
 
+  // Pendant un échange n'importe quelle case fait l'affaire : douze liserés
+  // jaunes ne désignent rien et couvrent la seule chose à lire, les cartes.
+  const markTargets = !legal.has('placeCard');
+
   const onCell = (index: number) => {
     if (legal.has('flipInitial')) return void run({ type: 'flipInitial', index });
     if (legal.has('placeCard')) return void run({ type: 'placeCard', index });
@@ -132,6 +140,7 @@ export function GameClient({ code }: { code: string }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
       <EventLayer view={view} />
+      <FlightLayer view={view} />
 
       {/* Barre du haut */}
       <header className="safe-top flex items-center justify-between px-4 pb-2">
@@ -175,7 +184,13 @@ export function GameClient({ code }: { code: string }) {
         <Lobby view={view} onStart={() => void run({ type: 'startGame' })} busy={busy} />
       ) : (
         <>
-          <OpponentStrip view={view} opponents={opponents} move={move} onOpen={setInspecting} />
+          <OpponentStrip
+            view={view}
+            opponents={opponents}
+            move={move}
+            echo={echo}
+            onOpen={setInspecting}
+          />
 
           {me && (
             <MyBoard
@@ -183,7 +198,11 @@ export function GameClient({ code }: { code: string }) {
               me={me}
               myTurn={myTurn}
               isTarget={isTarget}
+              markTargets={markTargets}
               onCell={onCell}
+              touched={echo?.touched[view.you.id] ?? null}
+              cleared={echo?.cleared[view.you.id] ?? null}
+              echoKey={echo?.version ?? 0}
             />
           )}
 
@@ -207,8 +226,8 @@ export function GameClient({ code }: { code: string }) {
         </>
       )}
 
-      {/* Mon tour : un liseré qui respire sur tout le pourtour. Il ne masque
-          rien et ne se rate pas, même le téléphone posé à côté de l'assiette. */}
+      {/* Mon tour : un liseré sur tout le pourtour. Il ne masque rien et ne se
+          rate pas, même le téléphone posé à côté de l'assiette. */}
       {myTurn && view.phase === 'playing' && (
         <div className="turn-glow pointer-events-none fixed inset-0 z-30" aria-hidden />
       )}
@@ -238,9 +257,10 @@ export function GameClient({ code }: { code: string }) {
         {notice && (
           <motion.div
             className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-6"
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
+            exit={{ opacity: 0 }}
+            transition={MOVE}
           >
             <span className="rounded-full border border-danger/40 bg-danger/20 px-4 py-2 text-center text-[0.75rem] font-medium text-ink backdrop-blur-md">
               {notice}
@@ -369,8 +389,8 @@ function Lobby({ view, onStart, busy }: { view: GameView; onStart: () => void; b
           <motion.li
             key={player.id}
             layout
-            initial={{ scale: 0.7, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             className="flex items-center gap-2 rounded-full border border-white/12 bg-white/6 py-1.5 pl-2 pr-3.5"
           >
             <span className="text-lg" aria-hidden>

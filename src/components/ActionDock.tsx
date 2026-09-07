@@ -2,6 +2,8 @@
 
 import { AnimatePresence, motion } from 'motion/react';
 import { PlayingCard } from './PlayingCard';
+import { DISCARD_PILE, DRAW_PILE, HAND } from './FlightLayer';
+import { MOVE } from '@/lib/client/motion';
 
 /**
  * Le bas de l'écran : la consigne, les deux piles, et la carte en main.
@@ -93,12 +95,13 @@ export function ActionDock({
       </div>
 
       <div className="flex items-end justify-center gap-5 pb-1">
-        {/* Pioche */}
+        {/* Pioche. Le nombre de cartes restantes n'y figure pas : il ne change
+            aucune décision — la pioche se reconstitue quand elle s'épuise. */}
         <div className="flex w-[3.8rem] flex-col items-center gap-1" data-testid="draw-pile">
-          {/* Une pile hors d'atteinte s'efface un peu : la défausse reste lisible,
-              mais on ne la confond pas avec un bouton. */}
+          {/* Une pile hors d'atteinte s'efface : on ne la confond pas avec un bouton. */}
           <div
-            className={`relative w-full ${canDraw ? 'is-playable' : holding ? 'opacity-35' : 'opacity-70'}`}
+            data-anchor={DRAW_PILE}
+            className={`relative w-full ${canDraw ? '' : holding ? 'opacity-35' : 'opacity-60'}`}
           >
             {/* Épaisseur du paquet : deux dos décalés sous le premier. */}
             <div className="pointer-events-none absolute inset-0 translate-x-[3px] translate-y-[3px] rounded-lg bg-black/40" />
@@ -110,33 +113,27 @@ export function ActionDock({
               intent={canDraw ? 'target' : 'none'}
               dimmed={drawPileCount === 0}
               onClick={canDraw ? onDraw : undefined}
-              aria-label={`Piocher — ${drawPileCount} cartes`}
+              aria-label="Piocher"
             />
-            {/* Le compte tient dans un coin : en légende il passait à la ligne
-                et remontait la pile au-dessus de la défausse. */}
-            <span className="tnum pointer-events-none absolute -right-1.5 -top-1.5 rounded-full bg-felt-700 px-1.5 py-px text-[0.58rem] font-bold text-ink-dim ring-1 ring-white/15">
-              {drawPileCount}
-            </span>
           </div>
           <PileLabel>pioche</PileLabel>
         </div>
 
         {/* Carte en main : emplacement toujours présent, rempli ou non. */}
         <div className="flex w-[4.8rem] flex-col items-center gap-1">
-          <div className="relative aspect-[3/4] w-full">
+          <div data-anchor={HAND} className="relative aspect-[3/4] w-full">
             <AnimatePresence>
               {holding ? (
                 <motion.div
                   key="held"
                   className="absolute inset-0"
-                  initial={{ y: 12, opacity: 0, scale: 0.85 }}
-                  animate={{ y: 0, opacity: 1, scale: 1 }}
-                  exit={{ y: -8, opacity: 0, scale: 0.9 }}
-                  transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+                  initial={{ y: 10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -6, opacity: 0 }}
+                  transition={MOVE}
                   style={{ filter: 'drop-shadow(0 8px 20px rgb(0 0 0 / 0.6))' }}
                 >
                   <PlayingCard
-                    layoutId="held-card"
                     value={heldCard}
                     faceUp={heldVisible}
                     size="lg"
@@ -173,8 +170,9 @@ export function ActionDock({
         {/* Défausse */}
         <div className="flex w-[3.8rem] flex-col items-center gap-1" data-testid="discard-pile">
           <div
+            data-anchor={DISCARD_PILE}
             className={`relative w-full ${
-              canTakeDiscard || throwHere ? 'is-playable' : holding ? 'opacity-50' : 'opacity-70'
+              canTakeDiscard || throwHere ? '' : holding ? 'opacity-50' : 'opacity-60'
             }`}
           >
             {discardTop === null ? (
@@ -192,7 +190,6 @@ export function ActionDock({
               )
             ) : (
               <PlayingCard
-                layoutId="discard-top"
                 value={discardTop}
                 faceUp
                 size="md"
