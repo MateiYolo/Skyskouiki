@@ -6,7 +6,15 @@
  * il faut viser des lettres et se demander si c'est un O ou un zéro.
  */
 
-export const CODE_LENGTH = 4;
+/**
+ * Trois chiffres, pas quatre.
+ *
+ * Un code de partie ne protège rien : il sert à retrouver la table de l'autre,
+ * qui est dans la même pièce ou au bout du fil. Mille codes suffisent
+ * largement à ce qu'aucune partie vivante n'en croise une autre, et trois
+ * chiffres se dictent d'un souffle et se tapent sans regarder.
+ */
+export const CODE_LENGTH = 3;
 
 /** Ne garde que les chiffres, et pas plus que la longueur d'un code. */
 export function cleanCode(input: string): string {

@@ -173,9 +173,9 @@ export function EventLayer({ view }: { view: GameView }) {
   // seul endroit où l'on peut encore apprendre que c'est à soi.
   const myTurn = view.phase === 'playing' && view.currentPlayerId === view.you.id;
   useEffect(() => {
-    document.title = myTurn ? '▶ À toi ! · Skyskouiki' : 'Skyskouiki';
+    document.title = myTurn ? '▶ À toi ! · Skouikjo' : 'Skouikjo';
     return () => {
-      document.title = 'Skyskouiki';
+      document.title = 'Skouikjo';
     };
   }, [myTurn]);
 

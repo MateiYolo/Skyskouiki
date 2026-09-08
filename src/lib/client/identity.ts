@@ -10,6 +10,8 @@ import { useCallback, useEffect, useState } from 'react';
  * recharger la page ou de verrouiller son téléphone sans perdre sa place.
  */
 
+// Le jeu s'appelle Skouikjo depuis, mais pas cette clé : la renommer
+// effacerait le prénom et la bestiole de tous ceux qui ont déjà joué.
 const KEY = 'skyskouiki.identity.v1';
 
 export interface Identity {

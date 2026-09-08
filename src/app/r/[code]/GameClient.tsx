@@ -342,7 +342,7 @@ async function shareGame(code: string): Promise<boolean> {
   const url = `${window.location.origin}/r/${code}`;
   try {
     if (navigator.share) {
-      await navigator.share({ title: 'Skyskouiki', text: `Rejoins ma partie : ${code}`, url });
+      await navigator.share({ title: 'Skouikjo', text: `Rejoins ma partie : ${code}`, url });
       return false;
     }
     await navigator.clipboard.writeText(url);

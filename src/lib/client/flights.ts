@@ -44,6 +44,14 @@ export interface FlightRequest {
   /** `null` = carte face cachée : on sait qu'elle bouge, pas ce qu'elle vaut. */
   value: number | null;
   delay: number;
+  /**
+   * Durée pendant laquelle la carte reste posée sur `from` au lieu de voler.
+   *
+   * Sert à une seule chose : couvrir la case qu'un échange va remplacer. La
+   * grille affiche déjà la carte d'après, donc sans ce cache on la voit
+   * arriver deux fois — une fois posée, une fois en vol au-dessus d'elle.
+   */
+  hold?: number;
 }
 
 type Listener = (requests: FlightRequest[]) => void;
@@ -60,6 +68,26 @@ export function onFlights(listener: Listener) {
   return () => {
     listeners.delete(listener);
   };
+}
+
+/**
+ * Un échange, dans l'ordre où il se lit : la carte arrive, se glisse sous celle
+ * qu'elle remplace, et celle-là s'en va.
+ *
+ * Les trois éléments partagent une seule horloge. `hold` couvre la case
+ * exactement jusqu'au départ de l'ancienne carte : avant, on verrait la
+ * nouvelle deux fois ; après, l'ancienne réapparaîtrait une fraction de
+ * seconde avant de s'envoler.
+ *
+ * L'ordre du tableau est l'ordre d'empilement : la carte qui arrive passe
+ * *sous* celle qui s'en va, comme sur une table.
+ */
+function swap(cell: string, arriving: number, leaving: number | null): FlightRequest[] {
+  return [
+    { from: HAND, to: cell, value: arriving, delay: 0 },
+    { from: cell, to: cell, value: leaving, delay: 0, hold: FLIGHT_NEXT },
+    { from: cell, to: DISCARD_PILE, value: leaving, delay: FLIGHT_NEXT },
+  ];
 }
 
 /** Ce qui doit voler quand *je* joue ce coup, connu avant même de l'envoyer. */
@@ -86,17 +114,9 @@ export function flightsForAction(
       if (view.heldCard === null) return [];
       const cell = view.players.find((p) => p.id === playerId)?.grid[action.index];
       if (cell === undefined || cell === null) return [];
-      const to = cellAnchor(playerId, action.index);
-      return [
-        { from: HAND, to, value: view.heldCard, delay: 0 },
-        // La carte remplacée part toujours, même quand on ignore encore sa
-        // valeur : voir une carte quitter sa grille pour la défausse est
-        // justement ce qui rend l'échange lisible. Face cachée en attendant —
-        // le serveur révélera le sommet de la défausse à sa réponse.
-        // Elle attend que la première soit posée : deux cartes qui se croisent
-        // au milieu de la table, c'est un échange qu'on ne peut plus suivre.
-        { from: to, to: DISCARD_PILE, value: cell.faceUp ? cell.value : null, delay: FLIGHT_NEXT },
-      ];
+      // Ma propre carte cachée reste cachée : le serveur ne m'a pas encore dit
+      // ce qu'il y avait dessous, et on n'invente pas une valeur.
+      return swap(cellAnchor(playerId, action.index), view.heldCard, cell.faceUp ? cell.value : null);
     }
 
     default:
@@ -189,9 +209,9 @@ export function flightsForEvents(view: GameView): FlightRequest[] {
         break;
       case 'placed': {
         if (event.playerId === view.you.id) break;
-        const to = cellAnchor(event.playerId, event.index);
-        out.push({ from: HAND, to, value: event.placed, delay: 0 });
-        out.push({ from: to, to: DISCARD_PILE, value: event.discarded, delay: FLIGHT_NEXT });
+        // Ici la carte remplacée est connue : elle vient d'atterrir sur la
+        // défausse, tout le monde l'a vue.
+        out.push(...swap(cellAnchor(event.playerId, event.index), event.placed, event.discarded));
         break;
       }
       case 'discarded':

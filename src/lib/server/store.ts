@@ -14,7 +14,7 @@ import { applyAction, createGame, toView, type Action, type GameState, type Game
  *     configuration doit être une erreur bruyante et non une partie fantôme.
  */
 
-/** Dix mille codes possibles, et les parties dorment moins de quinze jours :
+/** Mille codes possibles, et les parties dorment moins de quinze jours :
  *  la boucle de `createRoom` absorbe les rares collisions. */
 const CODE_ALPHABET = '0123456789';
 const MAX_COMMIT_RETRIES = 6;

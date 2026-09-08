@@ -21,6 +21,7 @@ export type Cue =
   | 'win'
   | 'lose';
 
+// Nom d'avant le renommage : la garder, c'est garder le réglage de chacun.
 const MUTE_KEY = 'skyskouiki.muted.v1';
 
 let ctx: AudioContext | null = null;

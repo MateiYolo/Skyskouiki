@@ -3,8 +3,8 @@ import type { MetadataRoute } from 'next';
 /** Manifeste PWA : « Ajouter à l'écran d'accueil » donne une vraie appli plein écran. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Skyskouiki',
-    short_name: 'Skyskouiki',
+    name: 'Skouikjo',
+    short_name: 'Skouikjo',
     description: 'Le Skyjo à deux, chacun sur son téléphone.',
     start_url: '/',
     display: 'standalone',

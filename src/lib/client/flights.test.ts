@@ -101,17 +101,19 @@ describe('flightsForEvents', () => {
 
   it('fait partir la carte remplacée seulement une fois l’autre posée', () => {
     const view = makeView({ lastEvents: [placed(THEM, 5)] });
-    const [arrive, depart] = flightsForEvents(view);
+    const cell = cellAnchor(THEM, 5);
+    const [arrive, mask, depart] = flightsForEvents(view);
 
-    expect(arrive).toEqual({ from: HAND, to: cellAnchor(THEM, 5), value: 7, delay: 0 });
-    expect(depart).toEqual({
-      from: cellAnchor(THEM, 5),
-      to: DISCARD_PILE,
-      value: 3,
-      delay: FLIGHT_NEXT,
-    });
+    expect(arrive).toEqual({ from: HAND, to: cell, value: 7, delay: 0 });
+    expect(depart).toEqual({ from: cell, to: DISCARD_PILE, value: 3, delay: FLIGHT_NEXT });
     // Deux cartes qui se croisent au milieu de la table ne se suivent plus.
     expect(depart.delay).toBeGreaterThanOrEqual(FLIGHT_DURATION);
+
+    // La case affiche déjà la carte d'après : sans ce cache, on la verrait
+    // posée avant de la voir arriver. Il tient pile jusqu'au départ de
+    // l'ancienne, et il est empilé après elle — la nouvelle se glisse dessous.
+    expect(mask).toEqual({ from: cell, to: cell, value: 3, delay: 0, hold: FLIGHT_NEXT });
+    expect(mask.hold).toBe(depart.delay);
   });
 
   it('ne rejoue pas mon propre échange : il est déjà parti au doigt', () => {

@@ -1,7 +1,7 @@
-# Skyskouiki
+# Skouikjo
 
 Le Skyjo à deux (ou à huit), chacun sur son téléphone. Une page web, un code à
-quatre chiffres, et c'est parti. Pas de compte, pas de pub, pas de store.
+trois chiffres, et c'est parti. Pas de compte, pas de pub, pas de store.
 
 Règles officielles, y compris les deux qui font le sel du jeu : l'élimination
 des colonnes de trois cartes identiques, et le doublement du score de celui qui
