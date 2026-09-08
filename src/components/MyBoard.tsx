@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Avatar, ScoreTiles } from './PlayerPanel';
 import { PlayerGrid, type ClearEcho } from './PlayerGrid';
 import type { GameView, ViewPlayer } from '@/lib/skyjo';
@@ -28,7 +29,12 @@ export interface MyBoardProps {
   revealing: readonly number[];
 }
 
-export function MyBoard({
+/**
+ * Mémoïsée : l'écran de jeu porte une demi-douzaine d'états qui n'ont rien à
+ * voir avec la table — une annonce d'erreur qui s'efface, le menu ⚙, la fiche
+ * d'un adversaire, la préférence de son. Chacun redessinait les douze cartes.
+ */
+export const MyBoard = memo(function MyBoard({
   view,
   me,
   myTurn,
@@ -86,4 +92,4 @@ export function MyBoard({
       </div>
     </div>
   );
-}
+})

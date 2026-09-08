@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EventLayer } from '@/components/EventLayer';
 import { FlightLayer } from '@/components/FlightLayer';
@@ -17,7 +17,7 @@ import { MOVE } from '@/lib/client/motion';
 import { armAudio, cue, initAudio, isMuted, setMuted } from '@/lib/client/feedback';
 import { useGame } from '@/lib/client/useGame';
 import { heldSummary, lastMove } from '@/lib/skyjo';
-import type { GameView } from '@/lib/skyjo';
+import type { GameView, LegalAction } from '@/lib/skyjo';
 
 /** Ce que le joueur doit faire, là, maintenant. */
 function prompt(view: GameView): { title: string; hint: string } {
@@ -130,6 +130,77 @@ export function GameClient({ code }: { code: string }) {
     });
   }, [view, identity, me, joining, act]);
 
+  // Ce que le prochain tap doit envoyer change à chaque coup ; le gestionnaire,
+  // lui, ne doit pas. S'il changeait d'identité à chaque version reçue, les
+  // douze cases se redessineraient toutes à chaque réponse du serveur — la
+  // mémoïsation ne filtrerait plus rien, et ça se voit pendant les
+  // retournements. La consigne se lit donc dans une référence.
+  const legal = useMemo<ReadonlySet<LegalAction>>(
+    () => new Set(view?.legalActions ?? []),
+    [view?.legalActions],
+  );
+  const legalRef = useRef(legal);
+  useEffect(() => {
+    legalRef.current = legal;
+  }, [legal]);
+
+  const onCell = useCallback(
+    (index: number) => {
+      const now = legalRef.current;
+      if (now.has('flipInitial')) return void run({ type: 'flipInitial', index });
+      if (now.has('placeCard')) return void run({ type: 'placeCard', index });
+      if (now.has('flipCard')) return void run({ type: 'flipCard', index });
+    },
+    [run],
+  );
+
+  // Mémoïsée pour la même raison que les gestionnaires : `MyBoard` la reçoit en
+  // propriété, et une fonction neuve à chaque rendu lui ferait refaire ses douze
+  // cartes chaque fois qu'un état sans rapport bouge — une annonce qui s'efface,
+  // le menu ⚙ qu'on ouvre.
+  const isTarget = useCallback(
+    (index: number) => {
+      if (!me) return false;
+      const cell = me.grid[index];
+      if (!cell) return false;
+      // Une carte déjà partie en rotation n'attend plus rien de nous.
+      if (revealing.includes(index)) return false;
+      if (legal.has('flipInitial')) {
+        // Deux cartes, celles qui tournent déjà comprises : sans ce compte, un
+        // troisième tap partirait pour se faire refuser par le serveur.
+        return !cell.faceUp && me.faceUpCount + revealing.length < 2;
+      }
+      if (legal.has('placeCard')) return true;
+      if (legal.has('flipCard')) return !cell.faceUp;
+      return false;
+    },
+    [legal, me, revealing],
+  );
+
+  const onDraw = useCallback(() => void run({ type: 'drawFromPile' }), [run]);
+  const onTakeDiscard = useCallback(() => void run({ type: 'takeDiscard' }), [run]);
+  const onDiscardHeld = useCallback(() => void run({ type: 'discardHeld' }), [run]);
+  const onStart = useCallback(() => void run({ type: 'startGame' }), [run]);
+  const onNextRound = useCallback(() => void run({ type: 'nextRound' }), [run]);
+  const onPlayAgain = useCallback(() => void run({ type: 'playAgain' }), [run]);
+
+  const opponents = useMemo(
+    () => view?.players.filter((p) => p.id !== view.you.id) ?? [],
+    [view],
+  );
+
+  const move = useMemo(() => (view ? lastMove(view) : null), [view]);
+
+  // Qui tient la carte posée au milieu de la table. Sans nom dessus, elle
+  // n'appartient à personne et un tour d'adversaire se lit comme un décor.
+  const holderId = view?.heldFrom !== null ? view?.currentPlayerId : null;
+  const holder = useMemo(() => {
+    const carrier = holderId ? view?.players.find((p) => p.id === holderId) : null;
+    return carrier
+      ? { name: carrier.name, emoji: carrier.emoji, isMe: carrier.id === view!.you.id }
+      : null;
+  }, [holderId, view]);
+
   if (!ready || loading) {
     return <Centered>Chargement…</Centered>;
   }
@@ -148,45 +219,14 @@ export function GameClient({ code }: { code: string }) {
   }
 
   const { title, hint } = prompt(view);
-  const opponents = view.players.filter((p) => p.id !== view.you.id);
-  const legal = new Set(view.legalActions);
   const myTurn = view.currentPlayerId === view.you.id;
-  const move = lastMove(view);
   const held = heldSummary(view);
-  // Qui tient la carte posée au milieu de la table. Sans nom dessus, elle
-  // n'appartient à personne et un tour d'adversaire se lit comme un décor.
-  const carrier = view.heldFrom !== null ? view.players.find((p) => p.id === view.currentPlayerId) : null;
-  const holder = carrier
-    ? { name: carrier.name, emoji: carrier.emoji, isMe: carrier.id === view.you.id }
-    : null;
   // Résolu au rendu : un joueur qui quitte referme sa fiche de lui-même.
   const inspected = opponents.find((p) => p.id === inspecting) ?? null;
-
-  const isTarget = (index: number) => {
-    if (!me) return false;
-    const cell = me.grid[index];
-    if (!cell) return false;
-    // Une carte déjà partie en rotation n'attend plus rien de nous.
-    if (revealing.includes(index)) return false;
-    if (legal.has('flipInitial')) {
-      // Deux cartes, celles qui tournent déjà comprises : sans ce compte, un
-      // troisième tap partirait pour se faire refuser par le serveur.
-      return !cell.faceUp && me.faceUpCount + revealing.length < 2;
-    }
-    if (legal.has('placeCard')) return true;
-    if (legal.has('flipCard')) return !cell.faceUp;
-    return false;
-  };
 
   // Pendant un échange n'importe quelle case fait l'affaire : douze liserés
   // jaunes ne désignent rien et couvrent la seule chose à lire, les cartes.
   const markTargets = !legal.has('placeCard');
-
-  const onCell = (index: number) => {
-    if (legal.has('flipInitial')) return void run({ type: 'flipInitial', index });
-    if (legal.has('placeCard')) return void run({ type: 'placeCard', index });
-    if (legal.has('flipCard')) return void run({ type: 'flipCard', index });
-  };
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
@@ -232,7 +272,7 @@ export function GameClient({ code }: { code: string }) {
       )}
 
       {view.phase === 'lobby' ? (
-        <Lobby view={view} onStart={() => void run({ type: 'startGame' })} busy={busy} />
+        <Lobby view={view} onStart={onStart} busy={busy} />
       ) : (
         <>
           <OpponentStrip
@@ -260,9 +300,9 @@ export function GameClient({ code }: { code: string }) {
             canDraw={legal.has('drawFromPile')}
             canTakeDiscard={legal.has('takeDiscard')}
             canDiscardHeld={legal.has('discardHeld')}
-            onDraw={() => void run({ type: 'drawFromPile' })}
-            onTakeDiscard={() => void run({ type: 'takeDiscard' })}
-            onDiscardHeld={() => void run({ type: 'discardHeld' })}
+            onDraw={onDraw}
+            onTakeDiscard={onTakeDiscard}
+            onDiscardHeld={onDiscardHeld}
           />
 
           {me && (
@@ -303,12 +343,12 @@ export function GameClient({ code }: { code: string }) {
       <AnimatePresence>
         {view.phase === 'roundOver' && (
           <Delayed by={revealHold(view)}>
-            <RoundSummary view={view} busy={busy} onNext={() => void run({ type: 'nextRound' })} />
+            <RoundSummary view={view} busy={busy} onNext={onNextRound} />
           </Delayed>
         )}
         {view.phase === 'gameOver' && (
           <Delayed by={revealHold(view)}>
-            <GameOverPanel view={view} busy={busy} onRestart={() => void run({ type: 'playAgain' })} />
+            <GameOverPanel view={view} busy={busy} onRestart={onPlayAgain} />
           </Delayed>
         )}
       </AnimatePresence>

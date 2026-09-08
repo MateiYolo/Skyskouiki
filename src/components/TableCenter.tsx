@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
+import { memo } from 'react';
 import { PlayingCard } from './PlayingCard';
 import { DISCARD_PILE, DRAW_PILE, HAND } from '@/lib/client/flights';
 import { FLIGHT_DURATION, MOVE } from '@/lib/client/motion';
@@ -79,7 +80,9 @@ function PileLabel({ children, accent = false }: { children: React.ReactNode; ac
   );
 }
 
-export function TableCenter({
+/** Mémoïsé pour la même raison que `MyBoard` : trois cartes et une consigne
+ *  n'ont pas à se redessiner parce qu'un message d'erreur vient de disparaître. */
+export const TableCenter = memo(function TableCenter({
   title,
   hint,
   emphasis,
@@ -265,4 +268,4 @@ export function TableCenter({
       </div>
     </div>
   );
-}
+})

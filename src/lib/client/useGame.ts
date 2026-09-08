@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GameView } from '@/lib/skyjo';
 import { flightsForAction, requestFlights } from './flights';
-import { optimisticView, revealingIndex } from './optimistic';
+import { optimisticView, revealingIndex, stillWaiting } from './optimistic';
 import type { ClientAction } from './actions';
 
 export type { ClientAction };
@@ -60,6 +60,34 @@ export function useGame(code: string, playerId: string | null) {
   // Les coups partent en file : le joueur peut enchaîner deux taps, le serveur
   // n'en verra jamais deux à la fois sur un état qui n'existe déjà plus.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+  // La vue courante, lisible depuis un gestionnaire d'événement sans faire de
+  // `act` une fonction neuve à chaque coup : c'est ce qui permet aux panneaux
+  // mémoïsés de ne pas se redessiner quand seul le contenu de la partie change.
+  const viewRef = useRef<GameView | null>(null);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  /**
+   * Adopte une vue qui fait autorité.
+   *
+   * C'est aussi le seul endroit où une case cesse d'attendre sa valeur : elle
+   * ne redescend que lorsqu'une vue du serveur la montre retournée (ou la fait
+   * disparaître avec sa colonne). Retirer l'attente sur la seule fin de requête
+   * faisait clignoter le premier retournement de début de manche — sa réponse
+   * arrive pendant que le second est encore en vol, donc sans nouvelle vue à
+   * afficher, et la carte repartait face cachée le temps d'un aller-retour.
+   */
+  const applyView = useCallback(
+    (next: GameView) => {
+      lastVersion.current = next.version;
+      setState({ view: next, loading: false, error: null });
+      setRevealing((current) =>
+        stillWaiting(current, next.players.find((p) => p.id === playerId)?.grid),
+      );
+    },
+    [playerId],
+  );
 
   const refresh = useCallback(async (): Promise<void> => {
     if (!playerId) return;
@@ -81,21 +109,27 @@ export function useGame(code: string, playerId: string | null) {
         );
         const body = await res.json();
         if (!res.ok) {
+          // La prochaine réponse valide devra repasser, quelle que soit sa version.
+          lastVersion.current = 0;
           setState({ view: null, loading: false, error: body.error ?? 'Partie introuvable.' });
           return;
         }
         // Une action est partie entre-temps : sa réponse fera foi, pas celle-ci.
         if (pending.current > 0) return;
         const view = body as GameView;
-        lastVersion.current = view.version;
-        setState({ view, loading: false, error: null });
+        // Rien de neuf : le temps réel nous renvoie aussi l'écho de nos propres
+        // coups, dont la réponse du POST a déjà livré la vue. Redessiner la
+        // table pour une version qu'on affiche déjà, c'est payer deux fois
+        // chaque coup — et la seconde fois tombe pile pendant l'animation.
+        if (view.version === lastVersion.current) return;
+        applyView(view);
       } while (refreshAgain.current);
     } catch {
       setState((s) => ({ ...s, loading: false, error: 'Connexion perdue.' }));
     } finally {
       inFlight.current = false;
     }
-  }, [code, playerId]);
+  }, [applyView, code, playerId]);
 
   /**
    * Envoie une action, après l'avoir jouée localement.
@@ -112,19 +146,28 @@ export function useGame(code: string, playerId: string | null) {
 
       // L'affichage bouge maintenant. L'ordre compte : le vol se mesure sur la
       // mise en page d'avant le coup.
-      if (view) requestFlights(flightsForAction(view, action, playerId));
+      const before = viewRef.current;
+      if (before) requestFlights(flightsForAction(before, action, playerId));
       setState((s) => {
         const guess = s.view && optimisticView(s.view, action, playerId);
-        return guess ? { ...s, view: guess } : s;
+        // `optimisticView` peut rendre la vue telle quelle (un retournement ne
+        // change rien tant que la valeur n'est pas là) : inutile de remonter un
+        // état neuf pour ça, tout l'écran se redessinerait pour rien.
+        return guess && guess !== s.view ? { ...s, view: guess } : s;
       });
       const turning = revealingIndex(action);
-      if (turning !== null) setRevealing((r) => [...r, turning]);
+      if (turning !== null) setRevealing((r) => (r.includes(turning) ? r : [...r, turning]));
 
       pending.current += 1;
       setBusy(true);
 
       // L'envoi, lui, attend son tour derrière le coup précédent.
       const send = async (): Promise<string | null> => {
+        // Le pari est perdu : la case n'attend plus rien, elle se remet comme
+        // le serveur la connaît.
+        const giveUp = () => {
+          if (turning !== null) setRevealing((r) => r.filter((i) => i !== turning));
+        };
         try {
           const res = await fetch(`/api/games/${code}`, {
             method: 'POST',
@@ -135,21 +178,20 @@ export function useGame(code: string, playerId: string | null) {
           pending.current -= 1;
           if (!res.ok) {
             // Le pari était mauvais : on reprend l'état réel avant d'expliquer.
+            giveUp();
             void refresh();
             return body.error ?? 'Action refusée.';
           }
-          if (pending.current === 0) {
-            const view = body as GameView;
-            lastVersion.current = view.version;
-            setState({ view, loading: false, error: null });
-          }
+          // Une réponse doublée par un coup encore en vol n'est plus l'état du
+          // jeu : c'est la dernière qui fera autorité.
+          if (pending.current === 0) applyView(body as GameView);
           return null;
         } catch {
           pending.current -= 1;
+          giveUp();
           void refresh();
           return 'Connexion perdue.';
         } finally {
-          if (turning !== null) setRevealing((r) => r.filter((i) => i !== turning));
           if (pending.current === 0) setBusy(false);
         }
       };
@@ -168,7 +210,7 @@ export function useGame(code: string, playerId: string | null) {
       queue.current = run;
       return run;
     },
-    [code, playerId, refresh, view],
+    [applyView, code, playerId, refresh],
   );
 
   useEffect(() => {
@@ -186,7 +228,16 @@ export function useGame(code: string, playerId: string | null) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'skyjo', table: 'games', filter: `code=eq.${code}` },
-        () => void refresh(),
+        (payload) => {
+          // La méta publique porte la version — c'est même sa seule raison
+          // d'être. Quand elle n'est pas plus récente que celle qu'on affiche,
+          // c'est l'écho de notre propre coup, dont la réponse du POST a déjà
+          // livré la vue : aller la redemander, c'est un aller-retour complet
+          // qui retombe pile pendant l'animation du coup qu'on vient de jouer.
+          const version = (payload.new as { version?: unknown } | null)?.version;
+          if (typeof version === 'number' && version <= lastVersion.current) return;
+          void refresh();
+        },
       )
       .subscribe((status) => setLive(status === 'SUBSCRIBED'));
 

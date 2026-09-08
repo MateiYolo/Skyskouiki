@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
+import { memo, useCallback } from 'react';
 import { EmptySlot, PlayingCard, type CardSize } from './PlayingCard';
 import { cellAnchor } from '@/lib/client/flights';
 import { CLEAR_STAGGER } from '@/lib/client/motion';
@@ -114,8 +115,68 @@ function ClearGhost({
   );
 }
 
+/**
+ * Une case, et rien qu'elle.
+ *
+ * Séparer chaque case en composant mémoïsé n'est pas de la coquetterie : un
+ * coup ne touche qu'une carte sur douze, et sans ce découpage les onze autres
+ * refaisaient le trajet complet — conteneur 3D, deux faces, animation — à
+ * chaque rendu de la grille.
+ *
+ * D'où des propriétés toutes scalaires, la valeur de la carte comprise : la
+ * vue arrive du réseau, donc chaque case est un objet neuf à chaque réponse du
+ * serveur, et le comparer par référence ne filtrerait jamais rien. Le seul
+ * objet qui reste — le liseré du dernier coup — est construit ici, pour ne pas
+ * changer d'identité tant que la case n'a pas bougé.
+ */
+const GridCell = memo(function GridCell({
+  index,
+  value,
+  faceUp,
+  size,
+  radius,
+  playable,
+  marked,
+  touched,
+  echoKey,
+  turning,
+  anchor,
+  onCell,
+}: {
+  index: number;
+  /** `null` quand la carte est face cachée : sa valeur est un secret du serveur. */
+  value: number | null;
+  faceUp: boolean;
+  size: CardSize;
+  radius: string;
+  /** Le joueur peut agir sur cette case maintenant. */
+  playable: boolean;
+  /** …et il faut le lui montrer. Faux quand *toutes* les cases le sont. */
+  marked: boolean;
+  touched: boolean;
+  echoKey: number;
+  turning: boolean;
+  anchor: string | undefined;
+  onCell?: (index: number) => void;
+}) {
+  const press = useCallback(() => onCell?.(index), [onCell, index]);
+
+  return (
+    <PlayingCard
+      data-anchor={anchor}
+      value={faceUp ? value : null}
+      faceUp={faceUp || turning}
+      size={size}
+      intent={playable && marked ? 'target' : 'none'}
+      overlay={touched ? <TouchedRing key={echoKey} radius={radius} /> : undefined}
+      onClick={playable && onCell ? press : undefined}
+      aria-label={faceUp ? `Carte ${value}` : 'Carte face cachée'}
+    />
+  );
+});
+
 /** La grille 4 × 3 d'un joueur. Une case vide est une colonne déjà éliminée. */
-export function PlayerGrid({
+export const PlayerGrid = memo(function PlayerGrid({
   grid,
   size = 'md',
   isTarget,
@@ -155,24 +216,24 @@ export function PlayerGrid({
           );
         }
 
-        const target = isTarget?.(index) ?? false;
-        const turning = revealing?.includes(index) ?? false;
-        const label = cell.faceUp ? `Carte ${cell.value}` : 'Carte face cachée';
-
         return (
-          <PlayingCard
+          <GridCell
             key={index}
-            data-anchor={playerId ? cellAnchor(playerId, index) : undefined}
+            index={index}
             value={cell.faceUp ? cell.value : null}
-            faceUp={cell.faceUp || turning}
+            faceUp={cell.faceUp}
             size={size}
-            intent={target && markTargets ? 'target' : 'none'}
-            overlay={touched === index ? <TouchedRing key={echoKey} radius={radius} /> : undefined}
-            onClick={target && onCell ? () => onCell(index) : undefined}
-            aria-label={label}
+            radius={radius}
+            playable={isTarget?.(index) ?? false}
+            marked={markTargets}
+            touched={touched === index}
+            echoKey={echoKey}
+            turning={revealing?.includes(index) ?? false}
+            anchor={playerId ? cellAnchor(playerId, index) : undefined}
+            onCell={onCell}
           />
         );
       })}
     </div>
   );
-}
+})

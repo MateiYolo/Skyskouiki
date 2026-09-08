@@ -129,3 +129,28 @@ export function optimisticView(
 export function revealingIndex(action: ClientAction): number | null {
   return action.type === 'flipInitial' || action.type === 'flipCard' ? action.index : null;
 }
+
+/**
+ * Les cases qui attendent encore leur valeur, une fois cette grille reçue.
+ *
+ * Une case cesse d'attendre quand la grille qui fait autorité la montre
+ * retournée — ou la fait disparaître avec sa colonne. Pas quand sa requête se
+ * termine : en début de manche les deux retournements partent ensemble, et la
+ * réponse du premier arrive alors que le second est encore en vol, donc sans
+ * vue à afficher. La lâcher là faisait repartir la carte face cachée le temps
+ * d'un aller-retour, juste après qu'on l'ait vue tourner.
+ *
+ * Rend le tableau reçu tel quel quand rien ne change : l'identité sert de
+ * comparaison en amont, et un tableau neuf redessinerait la grille pour rien.
+ */
+export function stillWaiting(
+  revealing: readonly number[],
+  grid: readonly ViewCell[] | undefined,
+): readonly number[] {
+  if (!revealing.length) return revealing;
+  const waiting = revealing.filter((index) => {
+    const cell = grid?.[index];
+    return cell != null && !cell.faceUp;
+  });
+  return waiting.length === revealing.length ? revealing : waiting;
+}

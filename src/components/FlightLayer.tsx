@@ -49,18 +49,35 @@ interface Flight extends FlightRequest {
 
 let nextId = 1;
 
-/** Le premier emplacement visible portant cette ancre. */
-function rectOf(anchor: string): DOMRect | null {
-  const nodes = document.querySelectorAll<HTMLElement>(`[data-anchor="${anchor}"]`);
-  for (const node of nodes) {
+/**
+ * Les emplacements demandés, mesurés en une seule passe.
+ *
+ * Un échange demande trois trajets, donc six extrémités. Les chercher une par
+ * une, c'était six parcours du DOM au moment précis où le doigt vient de se
+ * poser — avant même que la carte ait commencé à bouger. Une seule requête
+ * suffit, et les mesures qui suivent se lisent toutes sur la même mise en page.
+ *
+ * On retient, pour chaque nom, le premier emplacement effectivement visible :
+ * la même ancre peut exister deux fois (la grille d'un adversaire dans la bande
+ * et dans sa fiche ouverte), et une carte ne vole pas depuis un panneau replié.
+ */
+function measure(wanted: ReadonlySet<string>): Map<string, DOMRect> {
+  const found = new Map<string, DOMRect>();
+  for (const node of document.querySelectorAll<HTMLElement>('[data-anchor]')) {
+    const name = node.dataset.anchor;
+    if (!name || !wanted.has(name) || found.has(name)) continue;
     const rect = node.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) return rect;
+    if (rect.width > 0 && rect.height > 0) found.set(name, rect);
   }
-  return null;
+  return found;
 }
 
+// La requête média ne change pas d'un coup à l'autre : on la garde.
+let reduceMotion: MediaQueryList | null = null;
+
 function prefersReducedMotion() {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  reduceMotion ??= window.matchMedia('(prefers-reduced-motion: reduce)');
+  return reduceMotion.matches;
 }
 
 /** L'ombre au ras de la table, et celle du point haut du saut. */
@@ -201,11 +218,17 @@ export function FlightLayer({ view }: { view: GameView }) {
 
   /** Mesure les deux bouts maintenant : après, la mise en page aura bougé. */
   const launch = useCallback((requests: FlightRequest[]) => {
-    if (prefersReducedMotion()) return;
+    if (!requests.length || prefersReducedMotion()) return;
+    const wanted = new Set<string>();
+    for (const request of requests) {
+      wanted.add(request.from);
+      wanted.add(request.to);
+    }
+    const rects = measure(wanted);
     const fresh: Flight[] = [];
     for (const request of requests) {
-      const fromRect = rectOf(request.from);
-      const toRect = rectOf(request.to);
+      const fromRect = rects.get(request.from);
+      const toRect = rects.get(request.to);
       if (fromRect && toRect) fresh.push({ ...request, id: nextId++, fromRect, toRect });
     }
     if (fresh.length) setFlights((current) => [...current, ...fresh]);

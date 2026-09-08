@@ -50,13 +50,24 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   background-color: var(--color-felt-900);
-  /* Deux halos chauds décalés : la table est éclairée, pas uniforme. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Les halos qui éclairent la table : calés sur la fenêtre, pas sur le document.
+   `background-attachment: fixed` donnait le même résultat, mais au prix d'un
+   repeint de trois dégradés à chaque image sur les pages qui défilent — les
+   navigateurs mobiles ne savent pas le composer. Un calque en `position: fixed`
+   se comporte pareil à l'œil et se compose une fois pour toutes. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
     radial-gradient(ellipse 80% 55% at 50% -10%, #3b1d6e 0%, transparent 65%),
     radial-gradient(ellipse 70% 50% at 15% 105%, #1b2f6b 0%, transparent 60%),
     radial-gradient(ellipse 60% 45% at 95% 80%, #4a1f4e 0%, transparent 60%);
-  background-attachment: fixed;
-  -webkit-tap-highlight-color: transparent;
 }
 
 /* Rien ne se sélectionne par inadvertance quand on tapote vite. */
