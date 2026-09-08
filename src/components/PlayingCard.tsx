@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
+import { memo, useMemo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { FLIP, SNAP } from '@/lib/client/motion';
 
@@ -32,6 +33,43 @@ const TONES: Record<Tone, { from: string; to: string; ink: string; edge: string 
   // arrive du serveur. Une face neutre le dit sans rien inventer.
   blank: { from: '#57497e', to: '#332a55', ink: '#ffffff', edge: '#7b6bab' },
 };
+
+/**
+ * Le style de chaque face, calculé une fois pour toutes.
+ *
+ * Il n'y en a que six, et ils ne dépendent de rien d'autre que la valeur : les
+ * recomposer à chaque rendu, c'est concaténer trois dégradés et deux ombres par
+ * carte — une trentaine de fois par image sur une table qui bouge.
+ */
+const FACE_STYLE: Record<Tone, CSSProperties> = Object.fromEntries(
+  (Object.keys(TONES) as Tone[]).map((tone) => {
+    const { from, to, ink, edge } = TONES[tone];
+    return [
+      tone,
+      {
+        background: `linear-gradient(160deg, ${from} 0%, ${to} 100%)`,
+        boxShadow: `inset 0 1px 0 ${edge}, inset 0 -2px 6px rgb(0 0 0 / 0.28), 0 2px 6px rgb(0 0 0 / 0.4)`,
+        color: ink,
+        // La face neutre prend sa couleur quand la valeur arrive : le raccord
+        // se fait en fondu plutôt qu'en sautant d'un ton à l'autre.
+        transition: 'background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out)',
+      },
+    ];
+  }),
+) as Record<Tone, CSSProperties>;
+
+/** Le dos de carte : identique pour toutes, donc figé au chargement du module. */
+const BACK_STYLE: CSSProperties = {
+  background:
+    'repeating-linear-gradient(135deg, #2a1a55 0 4px, #221546 4px 8px), radial-gradient(circle at 50% 40%, #3b2470, #1a1035)',
+  boxShadow:
+    'inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -2px 6px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.4)',
+};
+
+/** Les deux seules échelles qu'une carte prenne : autant ne pas les réallouer. */
+const SCALE_IDLE = { scale: 1 };
+const SCALE_SELECTED = { scale: 1.04 };
+const TAP_SCALE = { scale: 0.96 };
 
 export type CardSize = 'xs' | 'sm' | 'md' | 'lg';
 
@@ -77,7 +115,7 @@ export interface PlayingCardProps {
   'aria-label'?: string;
 }
 
-export function PlayingCard({
+function Card({
   value,
   faceUp,
   size = 'md',
@@ -94,17 +132,18 @@ export function PlayingCard({
 }: PlayingCardProps) {
   // Retournée sans valeur : le serveur n'a pas encore répondu.
   const awaiting = faceUp && value === null;
-  const tone = TONES[value === null ? (faceUp ? 'blank' : 'navy') : toneOf(value)];
+  const face = FACE_STYLE[value === null ? (faceUp ? 'blank' : 'navy') : toneOf(value)];
   const interactive = !!onClick;
   const ring = INTENT_CLASS[intent];
   const label = ariaLabel ?? (faceUp && value !== null ? `Carte ${value}` : 'Carte face cachée');
+  const flip = useMemo(() => ({ rotateY: faceUp ? 0 : 180 }), [faceUp]);
 
   const inner = (
     <>
       <motion.div
         className="relative h-full w-full [transform-style:preserve-3d]"
         initial={false}
-        animate={{ rotateY: faceUp ? 0 : 180 }}
+        animate={flip}
         // Un retournement se regarde : c'est le moment où une carte cachée
         // devient une information. Trop court, il se lit comme un changement
         // d'image plutôt que comme un geste.
@@ -118,14 +157,7 @@ export function PlayingCard({
             awaiting ? 'card-awaiting' : '',
             ring,
           ].join(' ')}
-          style={{
-            background: `linear-gradient(160deg, ${tone.from} 0%, ${tone.to} 100%)`,
-            boxShadow: `inset 0 1px 0 ${tone.edge}, inset 0 -2px 6px rgb(0 0 0 / 0.28), 0 2px 6px rgb(0 0 0 / 0.4)`,
-            color: tone.ink,
-            // La face neutre prend sa couleur quand la valeur arrive : le
-            // raccord se fait en fondu plutôt qu'en sautant d'un ton à l'autre.
-            transition: 'background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out)',
-          }}
+          style={face}
         >
           <span className="tnum card-numeral font-black leading-none tracking-tight">{value}</span>
         </div>
@@ -137,12 +169,7 @@ export function PlayingCard({
             RADIUS[size],
             ring,
           ].join(' ')}
-          style={{
-            background:
-              'repeating-linear-gradient(135deg, #2a1a55 0 4px, #221546 4px 8px), radial-gradient(circle at 50% 40%, #3b2470, #1a1035)',
-            boxShadow:
-              'inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -2px 6px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.4)',
-          }}
+          style={BACK_STYLE}
         >
           <span className="card-pip leading-none opacity-50" aria-hidden>
             ✦
@@ -165,7 +192,7 @@ export function PlayingCard({
       className,
     ].join(' '),
     style,
-    animate: { scale: selected ? 1.04 : 1 },
+    animate: selected ? SCALE_SELECTED : SCALE_IDLE,
     transition: SNAP,
   };
 
@@ -214,12 +241,23 @@ export function PlayingCard({
             }
           : undefined
       }
-      whileTap={interactive ? { scale: 0.96 } : undefined}
+      whileTap={interactive ? TAP_SCALE : undefined}
     >
       {inner}
     </motion.div>
   );
 }
+
+/**
+ * Mémoïsée, parce qu'elle est le composant le plus instancié de l'écran.
+ *
+ * Une table en cours en aligne près de trente, chacune portant un conteneur 3D,
+ * deux faces et une animation. Un coup n'en change qu'une ou deux : sans ce
+ * filtre, la moindre secousse d'état — une annonce qui s'efface, un sondage qui
+ * revient — les redessinait toutes, et ça se voyait pile pendant les
+ * retournements.
+ */
+export const PlayingCard = memo(Card);
 
 /** Emplacement vide : une colonne éliminée laisse un trou, pas une carte. */
 export function EmptySlot({ size = 'md' }: { size?: CardSize }) {

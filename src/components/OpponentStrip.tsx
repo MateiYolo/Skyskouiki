@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
+import { memo } from 'react';
 import { Avatar, ScoreMeter, ScoreTiles } from './PlayerPanel';
 import { PlayerGrid } from './PlayerGrid';
 import { MOVE, SETTLE } from '@/lib/client/motion';
@@ -28,7 +29,8 @@ interface Props {
   onOpen: (playerId: string) => void;
 }
 
-export function OpponentStrip({ view, opponents, move, echo, onOpen }: Props) {
+/** Mémoïsée : la grille d'en face ne bouge que quand la partie bouge. */
+export const OpponentStrip = memo(function OpponentStrip({ view, opponents, move, echo, onOpen }: Props) {
   // À deux — le cas de loin le plus fréquent — l'unique adversaire s'étale en
   // largeur : ses infos passent à gauche et toute la hauteur du panneau revient
   // à sa grille. À plusieurs, chacun reprend une colonne et la bande défile.
@@ -59,7 +61,7 @@ export function OpponentStrip({ view, opponents, move, echo, onOpen }: Props) {
       ))}
     </div>
   );
-}
+})
 
 /** Ce que la grille de ce joueur doit rejouer du dernier coup. */
 function echoFor(playerId: string, echo: MoveEcho | null) {

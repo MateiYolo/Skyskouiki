@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { optimisticView, revealingIndex } from './optimistic';
+import { optimisticView, revealingIndex, stillWaiting } from './optimistic';
 import type { GameView, ViewCell } from '@/lib/skyjo';
 
 /**
@@ -141,5 +141,33 @@ describe('revealingIndex', () => {
     expect(revealingIndex({ type: 'flipInitial', index: 0 })).toBe(0);
     expect(revealingIndex({ type: 'placeCard', index: 3 })).toBeNull();
     expect(revealingIndex({ type: 'drawFromPile' })).toBeNull();
+  });
+});
+
+describe('stillWaiting', () => {
+  const grid: ViewCell[] = [cell(5), hidden(), null, hidden()];
+
+  it('libère la case que la grille montre retournée', () => {
+    expect(stillWaiting([0, 1], grid)).toEqual([1]);
+  });
+
+  it('libère aussi la case partie avec sa colonne', () => {
+    expect(stillWaiting([2, 3], grid)).toEqual([3]);
+  });
+
+  it('garde en attente tant que la valeur n’est pas là', () => {
+    // Le cas qui faisait clignoter : deux retournements de début de manche
+    // partent ensemble, et la réponse du premier n'apporte pas de vue.
+    expect(stillWaiting([1, 3], grid)).toEqual([1, 3]);
+  });
+
+  it('rend le tableau reçu quand rien ne change', () => {
+    const waiting = [1, 3];
+    expect(stillWaiting(waiting, grid)).toBe(waiting);
+    expect(stillWaiting([], grid)).toHaveLength(0);
+  });
+
+  it('n’attend rien d’une grille absente', () => {
+    expect(stillWaiting([0, 1], undefined)).toEqual([]);
   });
 });
