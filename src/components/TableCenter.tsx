@@ -106,9 +106,10 @@ export function TableCenter({
    * « Jeter » reste à côté pour qui cherche un mot plutôt qu'un endroit.
    */
   const throwHere = canDiscardHeld;
-  // Le serveur ne descend la valeur que si le joueur a le droit de la connaître :
-  // la sienne toujours, celle d'un adversaire seulement s'il l'a prise dans la
-  // défausse — auquel cas tout le monde l'a vue passer.
+  // La carte en main est publique, d'où qu'elle vienne (règle maison) : c'est
+  // elle qui explique pourquoi l'adversaire pose ici plutôt que là. Elle reste
+  // face cachée le temps d'un aller-retour quand c'est moi qui viens de
+  // piocher — le serveur ne me l'a pas encore dite.
   const heldVisible = heldCard !== null;
 
   return (

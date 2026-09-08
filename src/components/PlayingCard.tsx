@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import type { CSSProperties, ReactNode } from 'react';
-import { MOVE, SNAP } from '@/lib/client/motion';
+import { FLIP, SNAP } from '@/lib/client/motion';
 
 /**
  * Une carte Skyjo.
@@ -105,7 +105,10 @@ export function PlayingCard({
         className="relative h-full w-full [transform-style:preserve-3d]"
         initial={false}
         animate={{ rotateY: faceUp ? 0 : 180 }}
-        transition={MOVE}
+        // Un retournement se regarde : c'est le moment où une carte cachée
+        // devient une information. Trop court, il se lit comme un changement
+        // d'image plutôt que comme un geste.
+        transition={FLIP}
       >
         {/* Recto : la valeur */}
         <div

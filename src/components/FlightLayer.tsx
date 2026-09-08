@@ -3,7 +3,7 @@
 import { motion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PlayingCard } from './PlayingCard';
-import { EASE_OUT } from '@/lib/client/motion';
+import { EASE_TRAVEL, FLIGHT_DURATION } from '@/lib/client/motion';
 import { flightsForEvents, onFlights, type FlightRequest } from '@/lib/client/flights';
 import type { GameView } from '@/lib/skyjo';
 
@@ -20,12 +20,33 @@ import type { GameView } from '@/lib/skyjo';
  * demandé, et on fait glisser une carte de l'une à l'autre par-dessus tout le
  * reste. La carte d'arrivée est déjà en place dessous, donc le vol se fond
  * exactement dans sa destination — rien à masquer, rien à resynchroniser.
+ *
+ * Deux choses le rendent lisible plutôt que rapide :
+ *
+ *   - **il prend son temps** (`FLIGHT_DURATION`). Un demi-tiers de seconde, on
+ *     ne suit pas une carte du regard, on constate qu'un écran a changé ;
+ *   - **il passe au-dessus** : la carte s'élève au milieu du trajet et se pose
+ *     à l'arrivée. Une ligne droite entre deux points proches se confond avec
+ *     un fondu ; une courbe dit d'où ça vient et où ça va.
  */
 
 interface Flight extends FlightRequest {
   id: number;
   fromRect: DOMRect;
   toRect: DOMRect;
+}
+
+/**
+ * La hauteur de l'arc : un dixième de la distance parcourue, borné.
+ *
+ * Proportionnel, parce qu'un saut de vingt pixels pour traverser l'écran ne se
+ * voit pas, et qu'un saut de vingt pixels pour aller d'une case à sa voisine
+ * ressemble à un sursaut. Borné, parce qu'au-delà la carte sort du terrain.
+ */
+function liftOf(fromRect: DOMRect, toRect: DOMRect): number {
+  const dx = toRect.left - fromRect.left;
+  const dy = toRect.top - fromRect.top;
+  return Math.min(34, Math.max(10, Math.hypot(dx, dy) * 0.11));
 }
 
 let nextId = 1;
@@ -88,24 +109,35 @@ export function FlightLayer({ view }: { view: GameView }) {
             top: flight.fromRect.top,
             width: flight.fromRect.width,
             height: flight.fromRect.height,
+            scale: 1,
           }}
           animate={{
             opacity: 1,
             left: flight.toRect.left,
-            top: flight.toRect.top,
+            // Le point du milieu fait l'arc : la carte s'élève, puis se pose.
+            top: [
+              flight.fromRect.top,
+              (flight.fromRect.top + flight.toRect.top) / 2 - liftOf(flight.fromRect, flight.toRect),
+              flight.toRect.top,
+            ],
             width: flight.toRect.width,
             height: flight.toRect.height,
+            // Elle grossit un peu en chemin : soulevée de la table, elle passe
+            // visiblement par-dessus le reste au lieu de glisser dessous.
+            scale: [1, 1.08, 1],
           }}
           transition={{
-            duration: 0.32,
+            duration: FLIGHT_DURATION,
             delay: flight.delay,
-            ease: EASE_OUT,
-            opacity: { duration: 0.06, delay: flight.delay },
+            ease: EASE_TRAVEL,
+            top: { duration: FLIGHT_DURATION, delay: flight.delay, ease: EASE_TRAVEL, times: [0, 0.5, 1] },
+            scale: { duration: FLIGHT_DURATION, delay: flight.delay, ease: 'easeInOut', times: [0, 0.45, 1] },
+            opacity: { duration: 0.08, delay: flight.delay },
           }}
           onAnimationComplete={() =>
             setFlights((current) => current.filter((f) => f.id !== flight.id))
           }
-          style={{ filter: 'drop-shadow(0 10px 22px rgb(0 0 0 / 0.55))' }}
+          style={{ filter: 'drop-shadow(0 12px 26px rgb(0 0 0 / 0.6))', transformOrigin: 'center' }}
         >
           <PlayingCard value={flight.value} faceUp={flight.value !== null} size="md" fill />
         </motion.div>

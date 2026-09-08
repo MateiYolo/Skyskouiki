@@ -243,6 +243,7 @@ describe('élimination des colonnes (règle officielle)', () => {
       kind: 'column',
       index: 1,
       value: 8,
+      cells: columnIndices(1),
     });
   });
 
@@ -293,6 +294,7 @@ describe('élimination des lignes (règle maison)', () => {
       kind: 'row',
       index: 1,
       value: 6,
+      cells: rowIndices(1),
     });
   });
 
@@ -307,6 +309,48 @@ describe('élimination des lignes (règle maison)', () => {
 
     const grid = s.players.find((p) => p.id === id)!.grid;
     for (const i of rowIndices(1)) expect(grid[i]).not.toBeNull();
+    expect(s.lastEvents.some((e) => e.type === 'groupCleared')).toBe(false);
+  });
+
+  it('élimine une ligne de trois quand une colonne éliminée l’a raccourcie', () => {
+    let s = started(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    // La colonne 2 est déjà partie : la ligne 2 n'a plus que trois cases
+    // (8, 9 et 11), dont deux portent déjà un 1.
+    setGrid(s, id, [3, 4, null, 5, 6, 7, null, 8, 1, 1, null, 9]);
+    s.discardPile.push(1);
+    const discardBefore = s.discardPile.length;
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 11 });
+
+    const grid = s.players.find((p) => p.id === id)!.grid;
+    for (const i of rowIndices(2)) expect(grid[i]).toBeNull();
+    // -1 (carte prise) +1 (le 9 remplacé) +3 (la ligne : le trou ne part pas deux fois)
+    expect(s.discardPile.length).toBe(discardBefore + 3);
+    expect(s.lastEvents).toContainEqual({
+      type: 'groupCleared',
+      playerId: id,
+      kind: 'row',
+      index: 2,
+      value: 1,
+      cells: [8, 9, 11],
+    });
+  });
+
+  it('n’élimine pas une ligne réduite à deux cartes identiques', () => {
+    let s = started(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    // Deux colonnes déjà parties : il ne reste que deux cases sur la ligne 2.
+    setGrid(s, id, [3, null, null, 4, 5, null, null, 6, 1, null, null, 7]);
+    s.discardPile.push(1);
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 11 });
+
+    const grid = s.players.find((p) => p.id === id)!.grid;
+    expect(grid[8]).not.toBeNull();
+    expect(grid[11]).not.toBeNull();
     expect(s.lastEvents.some((e) => e.type === 'groupCleared')).toBe(false);
   });
 
@@ -520,14 +564,18 @@ describe('projection client', () => {
     expect(serialized).not.toContain('"drawPile"');
   });
 
-  it('garde pour lui la carte piochée face cachée', () => {
+  it('montre à tous la carte piochée (règle maison)', () => {
     let s = started(2);
     const id = s.players[s.currentPlayerIndex].id;
     const other = s.players[(s.currentPlayerIndex + 1) % 2].id;
     s = play(s, { type: 'drawFromPile', playerId: id });
 
+    // Écart assumé avec le jeu de société : à distance, une carte grise au
+    // milieu de la table ne raconte rien de ce que l'adversaire est en train
+    // de peser. Ce qui reste secret, c'est le reste de la pioche.
     expect(toView(s, id).heldCard).toBe(s.heldCard);
-    expect(toView(s, other).heldCard).toBeNull();
+    expect(toView(s, other).heldCard).toBe(s.heldCard);
+    expect(toView(s, other).heldFrom).toBe('draw');
   });
 
   it('montre à tous la carte prise dans la défausse', () => {

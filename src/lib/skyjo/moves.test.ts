@@ -79,23 +79,25 @@ describe('heldSummary', () => {
     expect(heldSummary(toView(s, id))).toBeNull();
   });
 
-  it('annonce une pioche sans en dévoiler la valeur', () => {
+  it('annonce une pioche, valeur comprise', () => {
     let s = started();
     const name = s.players[s.currentPlayerIndex].name;
     s = play(s, { type: 'drawFromPile', playerId: current(s) });
+    const drawn = s.heldCard!;
 
     const view = toView(s, other(s));
-    expect(heldSummary(view)).toEqual({ text: `${name} a pioché`, revealed: false });
-    expect(view.heldCard).toBeNull();
+    expect(heldSummary(view)).toEqual({ text: `${name} a pioché : ${drawn}`, revealed: true });
+    expect(view.heldCard).toBe(drawn);
   });
 
   it('annonce une prise dans la défausse, valeur comprise', () => {
     let s = started();
     const id = current(s);
+    const name = s.players.find((p) => p.id === id)!.name;
     const top = s.discardPile.at(-1)!;
     s = play(s, { type: 'takeDiscard', playerId: id });
     const view = toView(s, other(s));
-    expect(heldSummary(view)?.revealed).toBe(true);
+    expect(heldSummary(view)).toEqual({ text: `${name} a pris la défausse : ${top}`, revealed: true });
     expect(view.heldCard).toBe(top);
   });
 

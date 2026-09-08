@@ -90,17 +90,36 @@ export function countFaceUp(grid: readonly Cell[]): number {
 }
 
 /**
- * Valeur commune à toutes ces cases, ou `null` si elles ne forment pas un
- * groupe éliminable (case vide, carte encore cachée, ou valeurs différentes).
+ * Nombre minimum de cartes qu'un groupe doit encore contenir pour sauter.
+ *
+ * Trois, comme une colonne : c'est la taille de groupe que le jeu reconnaît.
+ * Une ligne en compte quatre au départ, mais une colonne éliminée lui en
+ * retire une — et il n'y a aucune raison qu'une ligne devenue entièrement
+ * homogène cesse de compter parce qu'elle a été raccourcie par une élimination
+ * précédente.
+ */
+export const MIN_GROUP = 3;
+
+/**
+ * Valeur commune aux cartes encore présentes sur ces cases, ou `null` si elles
+ * ne forment pas un groupe éliminable.
+ *
+ * Une case déjà vidée par une élimination précédente ne bloque pas : elle n'est
+ * plus là, elle ne peut pas dépareiller. Ce qui reste doit être face visible,
+ * de même valeur, et assez nombreux (`MIN_GROUP`).
  */
 function uniformValue(grid: readonly Cell[], indices: readonly number[]): number | null {
-  const first = grid[indices[0]];
-  if (!first || !first.faceUp) return null;
+  let value: number | null = null;
+  let count = 0;
   for (const i of indices) {
     const cell = grid[i];
-    if (!cell || !cell.faceUp || cell.value !== first.value) return null;
+    if (cell === null) continue;
+    if (!cell.faceUp) return null;
+    if (count > 0 && cell.value !== value) return null;
+    value = cell.value;
+    count++;
   }
-  return first.value;
+  return count >= MIN_GROUP ? value : null;
 }
 
 export interface ClearedGroup {
@@ -108,12 +127,19 @@ export interface ClearedGroup {
   /** Numéro de la colonne ou de la ligne concernée. */
   index: number;
   value: number;
+  /**
+   * Les cases effectivement retirées — celles qui portaient encore une carte.
+   * L'interface s'en sert pour montrer *lesquelles* partent : sur une ligne
+   * raccourcie par une colonne déjà éliminée, les indices de la ligne entière
+   * feraient apparaître une carte fantôme sur le trou.
+   */
+  cells: number[];
 }
 
 /**
  * Élimine les groupes de cartes identiques face visible : les colonnes de trois
- * (règle officielle) et les lignes de quatre (règle maison). Les cartes partent
- * à la défausse et ne comptent plus.
+ * (règle officielle) et les lignes entièrement homogènes (règle maison). Les
+ * cartes partent à la défausse et ne comptent plus.
  *
  * Les groupes sont d'abord repérés sur la grille intacte, puis retirés d'un
  * bloc : sinon, vider une ligne en premier empêcherait une colonne qui la
@@ -122,23 +148,21 @@ export interface ClearedGroup {
  * Mute `grid` et `discardPile`.
  */
 export function clearGroups(grid: Cell[], discardPile: number[]): ClearedGroup[] {
-  const found: Array<ClearedGroup & { cells: number[] }> = [];
+  const found: ClearedGroup[] = [];
 
-  for (let col = 0; col < COLS; col++) {
-    const cells = columnIndices(col);
-    const value = uniformValue(grid, cells);
-    if (value !== null) found.push({ kind: 'column', index: col, value, cells });
-  }
-  for (let row = 0; row < ROWS; row++) {
-    const cells = rowIndices(row);
-    const value = uniformValue(grid, cells);
-    if (value !== null) found.push({ kind: 'row', index: row, value, cells });
-  }
+  const collect = (kind: GroupKind, index: number, indices: number[]) => {
+    const value = uniformValue(grid, indices);
+    if (value === null) return;
+    found.push({ kind, index, value, cells: indices.filter((i) => grid[i] !== null) });
+  };
+
+  for (let col = 0; col < COLS; col++) collect('column', col, columnIndices(col));
+  for (let row = 0; row < ROWS; row++) collect('row', row, rowIndices(row));
 
   for (const i of new Set(found.flatMap((group) => group.cells))) {
     discardPile.push(grid[i]!.value);
     grid[i] = null;
   }
 
-  return found.map(({ kind, index, value }) => ({ kind, index, value }));
+  return found;
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { columnIndices, rowIndices } from '@/lib/skyjo';
 import type { GameView } from '@/lib/skyjo';
+import { clearDelay } from './flights';
 import type { ClearEcho } from '@/components/PlayerGrid';
 
 /**
@@ -56,9 +56,16 @@ export function useMoveEcho(view: GameView | null): MoveEcho | null {
           drewFrom = event.from;
           break;
         case 'groupCleared':
+          // Les cases viennent de l'événement, jamais de la géométrie du
+          // groupe : une ligne déjà trouée par une colonne éliminée n'en
+          // compte pas quatre, et un fantôme sur le trou serait un mensonge.
           cleared[event.playerId] = {
-            indices: event.kind === 'column' ? columnIndices(event.index) : rowIndices(event.index),
+            indices: event.cells,
             value: event.value,
+            // Les cartes restent en place jusque-là, puis partent à la
+            // défausse (cf. `flightsForEvents`). Le même instant des deux
+            // côtés : le fantôme s'efface pile quand la carte décolle.
+            delay: clearDelay(view),
           };
           break;
         default:
