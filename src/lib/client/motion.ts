@@ -29,8 +29,22 @@ export const EASE_OUT: [number, number, number, number] = [0.2, 0, 0, 1];
  * Une carte qui traverse le terrain part et arrive posément : elle accélère,
  * puis freine. Sans l'accélération du départ, le trajet semble commencer avant
  * le geste qui le provoque.
+ *
+ * Une seule courbe pour tout le trajet, et c'est ce qui compte : découpé en
+ * étapes, un déplacement se voit ralentir à chaque étape — la carte marque un
+ * temps d'arrêt au milieu de nulle part. Le trajet est donc une interpolation
+ * unique, et le petit saut par-dessus la table (`ARC`) se superpose dessus au
+ * lieu de le découper.
  */
 export const EASE_TRAVEL: [number, number, number, number] = [0.35, 0, 0.15, 1];
+
+/**
+ * La courbe du saut : la carte s'élève en freinant, puis retombe en
+ * accélérant. C'est une parabole, et c'est le seul endroit de l'application où
+ * une animation change de sens en cours de route — d'où deux courbes, une par
+ * moitié.
+ */
+export const ARC_EASE = ['easeOut', 'easeIn'] as const;
 
 export const SNAP: Transition = { duration: 0.14, ease: EASE_OUT };
 export const MOVE: Transition = { duration: 0.24, ease: EASE_OUT };
@@ -44,8 +58,14 @@ export const FLIP: Transition = { duration: 0.42, ease: EASE_OUT };
 /** Durée d'un trajet de carte, d'un bout à l'autre du terrain. */
 export const FLIGHT_DURATION = 0.5;
 
-/** Le temps de poser la première carte avant que la suivante ne parte. */
-export const FLIGHT_GAP = 0.12;
+/**
+ * Le temps de poser la première carte avant que la suivante ne parte.
+ *
+ * Court, parce qu'il ne sépare pas deux gestes indépendants : la carte
+ * remplacée quitte sa case juste après que la nouvelle s'y soit glissée
+ * dessous. C'est un seul mouvement, en deux temps.
+ */
+export const FLIGHT_GAP = 0.08;
 
 /** Deux trajets qui s'enchaînent : la seconde carte part quand la première est posée. */
 export const FLIGHT_NEXT = FLIGHT_DURATION + FLIGHT_GAP;

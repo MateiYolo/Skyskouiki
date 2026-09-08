@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { PlayingCard } from './PlayingCard';
 import { DISCARD_PILE, DRAW_PILE, HAND } from '@/lib/client/flights';
-import { MOVE } from '@/lib/client/motion';
+import { FLIGHT_DURATION, MOVE } from '@/lib/client/motion';
 
 /**
  * Le milieu de la table : la consigne, les deux piles, et la carte en main.
@@ -165,15 +165,23 @@ export function TableCenter({
           transition={MOVE}
         >
           <div data-anchor={HAND} className="relative aspect-[3/4] w-full">
+            {/* La carte en main n'apparaît qu'à l'instant où celle qui vole
+                jusqu'ici se pose (cf. `FlightLayer`). Sinon on la voit déjà
+                dans la main pendant qu'un deuxième exemplaire traverse encore
+                l'écran pour l'y apporter — deux fois la même carte, dont l'une
+                attend l'autre. Le départ, lui, est immédiat : c'est le vol qui
+                l'emporte. */}
             <AnimatePresence>
               {holding ? (
                 <motion.div
                   key="held"
                   className="absolute inset-0"
-                  initial={{ y: 10, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -6, opacity: 0 }}
-                  transition={MOVE}
+                  initial={{ opacity: 0 }}
+                  animate={{
+                    opacity: 1,
+                    transition: { duration: 0.1, delay: Math.max(0, FLIGHT_DURATION - 0.05) },
+                  }}
+                  exit={{ y: -6, opacity: 0, transition: MOVE }}
                   style={{ filter: 'drop-shadow(0 8px 20px rgb(0 0 0 / 0.6))' }}
                 >
                   <PlayingCard

@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { PlayingCard } from '@/components/PlayingCard';
 
 export const metadata: Metadata = {
-  title: 'Règles · Skyskouiki',
+  title: 'Règles · Skouikjo',
   description: 'Les règles officielles du Skyjo, en français, plus deux règles maison.',
 };
 
@@ -184,7 +184,7 @@ export default function RulesPage() {
       </Section>
 
       <p className="border-t border-white/10 pt-6 text-xs leading-relaxed text-ink-faint">
-        Skyjo est un jeu de Magilano. Skyskouiki est une implémentation personnelle de ses règles,
+        Skyjo est un jeu de Magilano. Skouikjo est une implémentation personnelle de ses règles,
         sans lien avec l’éditeur, faite pour jouer à deux sur nos téléphones.
       </p>
 

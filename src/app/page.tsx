@@ -93,9 +93,9 @@ export default function Home() {
       <div className="rise">
         <Fan />
 
-        <h1 className="text-center text-4xl font-black tracking-tight">Skyskouiki</h1>
+        <h1 className="text-center text-4xl font-black tracking-tight">Skouikjo</h1>
         <p className="mb-7 mt-2 text-center text-sm text-ink-dim">
-          Le Skyjo, chacun sur son téléphone. Règles officielles, une règle maison, zéro pub.
+          Le Skyjo, chacun sur son téléphone. Règles officielles, deux règles maison, zéro pub.
         </p>
 
         {/* Profil */}
@@ -148,7 +148,7 @@ export default function Home() {
             <input
               value={code}
               onChange={(event) => setCode(cleanCode(event.target.value))}
-              placeholder="1234"
+              placeholder="123"
               inputMode="numeric"
               autoComplete="one-time-code"
               autoCorrect="off"
