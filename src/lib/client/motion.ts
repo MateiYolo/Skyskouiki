@@ -80,4 +80,14 @@ export const CLEAR_HOLD = 0.45;
 /** Décalage entre deux cartes d'un même groupe : elles partent en éventail. */
 export const CLEAR_STAGGER = 0.07;
 
+/**
+ * Le temps que met une carte à se poser, une fois arrivée.
+ *
+ * Elle atteint sa case légèrement plus grande, puis se tasse à sa taille. Ce
+ * n'est pas un rebond — elle ne dépasse jamais sa cible, et rien n'est illisible
+ * pendant ce temps-là : la valeur est déjà en place et déjà lisible. C'est du
+ * poids, et c'est ce qui distingue une carte posée d'une image remplacée.
+ */
+export const IMPACT = 0.16;
+
 export const FLIGHT: Transition = { duration: FLIGHT_DURATION, ease: EASE_TRAVEL };

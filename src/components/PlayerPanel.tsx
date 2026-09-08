@@ -1,7 +1,8 @@
 'use client';
 
-import { motion } from 'motion/react';
-import { MOVE } from '@/lib/client/motion';
+import { AnimatePresence, motion } from 'motion/react';
+import { useEffect, useRef, useState } from 'react';
+import { FLIGHT_DURATION, MOVE } from '@/lib/client/motion';
 import type { ViewPlayer } from '@/lib/skyjo';
 
 /** Jauge de danger : on ne veut surtout pas la remplir. */
@@ -52,7 +53,14 @@ export function ScoreTiles({
 
   return (
     <div className="flex shrink-0 items-stretch gap-1">
-      <Tile label="manche" value={round} num={num} pad={pad} className="bg-white/[0.07] text-ink" />
+      <Tile
+        label="manche"
+        value={round}
+        num={num}
+        pad={pad}
+        className="bg-white/[0.07] text-ink"
+        delta
+      />
       <Tile
         label="total"
         value={total}
@@ -64,26 +72,100 @@ export function ScoreTiles({
   );
 }
 
+/**
+ * Le dernier changement de ce chiffre, tant qu'il est frais.
+ *
+ * Le premier rendu n'en produit pas : une tuile qui apparaît à l'ouverture
+ * d'une fiche adverse ne vient de rien.
+ */
+let nextDeltaId = 1;
+
+function useDelta(value: number): { id: number; delta: number } | null {
+  const [delta, setDelta] = useState<{ id: number; delta: number } | null>(null);
+  const previous = useRef<number | null>(null);
+
+  // Réaction à un chiffre qui arrive du serveur, pas à un rendu.
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = value;
+    if (before === null || before === value) return;
+    setDelta({ id: nextDeltaId++, delta: value - before });
+  }, [value]);
+
+  return delta;
+}
+
+/**
+ * Un chiffre, et ce que le dernier coup lui a fait.
+ *
+ * C'est le seul retour chiffré de l'écran de jeu, et il est là pour une raison
+ * précise : sans lui, retourner un 12 et retourner un -2 se ressemblent — la
+ * grille change, un nombre change quelque part, et rien ne dit lequel des deux
+ * vient de faire mal. Le « +12 » qui s'échappe de la tuile relie le geste à sa
+ * conséquence, et c'est ce lien-là qu'on vient rechercher au coup suivant.
+ *
+ * Il arrive une demi-seconde après le geste, pas avec lui : le temps que la
+ * carte se pose. Une conséquence qui devance sa cause n'en est plus une.
+ */
 function Tile({
   label,
   value,
   num,
   pad,
   className,
+  delta = false,
 }: {
   label: string;
   value: number;
   num: string;
   pad: string;
   className: string;
+  /** Annoncer les variations. Réservé au score de la manche : le cumul, lui,
+      ne bouge qu'entre deux manches, feuille de scores à l'appui. */
+  delta?: boolean;
 }) {
+  const change = useDelta(value);
+  const shown = delta ? change : null;
+
   return (
-    <div className={`flex flex-col items-center justify-center rounded-xl ${pad} ${className}`}>
+    <motion.div
+      className={`relative flex flex-col items-center justify-center rounded-xl ${pad} ${className}`}
+      animate={shown ? { scale: [1, 1.09, 1] } : { scale: 1 }}
+      key={shown?.id ?? 'still'}
+      transition={{ duration: 0.34, delay: shown ? FLIGHT_DURATION : 0, ease: 'easeOut' }}
+    >
       <span className="text-[0.5rem] font-semibold uppercase leading-none tracking-[0.12em] opacity-70">
         {label}
       </span>
       <span className={`tnum font-black leading-tight ${num}`}>{value}</span>
-    </div>
+
+      <AnimatePresence>
+        {shown && (
+          <motion.span
+            key={shown.id}
+            className="pointer-events-none absolute -top-0.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[0.68rem] font-black"
+            style={{
+              // Au Skyjo, monter c'est perdre : la couleur dit le sens avant
+              // que le chiffre ne soit lu.
+              color: shown.delta > 0 ? 'var(--color-danger)' : 'var(--color-good)',
+              textShadow: '0 1px 6px rgb(11 7 22 / 0.9)',
+            }}
+            initial={{ opacity: 0, y: 2 }}
+            animate={{ opacity: [0, 1, 1, 0], y: [2, -9, -13, -19] }}
+            exit={{ opacity: 0 }}
+            transition={{
+              duration: 1.1,
+              delay: FLIGHT_DURATION,
+              times: [0, 0.16, 0.6, 1],
+              ease: 'easeOut',
+            }}
+          >
+            {shown.delta > 0 ? '+' : '−'}
+            {Math.abs(shown.delta)}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 

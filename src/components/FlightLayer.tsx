@@ -3,7 +3,7 @@
 import { motion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PlayingCard } from './PlayingCard';
-import { ARC_EASE, EASE_TRAVEL, FLIGHT_DURATION } from '@/lib/client/motion';
+import { ARC_EASE, EASE_TRAVEL, FLIGHT_DURATION, IMPACT } from '@/lib/client/motion';
 import { flightsForEvents, onFlights, type FlightRequest } from '@/lib/client/flights';
 import type { GameView } from '@/lib/skyjo';
 
@@ -63,6 +63,10 @@ function prefersReducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+/** L'ombre au ras de la table, et celle du point haut du saut. */
+const LOW_SHADOW = 'drop-shadow(0 3px 7px rgb(0 0 0 / 0.55))';
+const HIGH_SHADOW = 'drop-shadow(0 16px 30px rgb(0 0 0 / 0.6))';
+
 /**
  * La hauteur de l'arc : un dixième de la distance parcourue, borné.
  *
@@ -88,22 +92,27 @@ function Flying({ flight, onDone }: { flight: Flight; onDone: (id: number) => vo
   const dx = toRect.left - fromRect.left;
   const dy = toRect.top - fromRect.top;
   const duration = hold ?? FLIGHT_DURATION;
+  // La carte reste un instant de plus que son trajet : le temps de se poser.
+  const alive = hold ? hold : FLIGHT_DURATION + IMPACT;
 
   // Le retrait ne dépend pas de la fin d'une animation en particulier : une
   // carte qui attend sur place n'en a aucune, et une carte en vol en a trois.
   useEffect(() => {
-    const timer = setTimeout(() => onDone(id), (delay + duration) * 1000 + 60);
+    const timer = setTimeout(() => onDone(id), (delay + alive) * 1000 + 60);
     return () => clearTimeout(timer);
-  }, [id, delay, duration, onDone]);
+  }, [id, delay, alive, onDone]);
 
   const card = (
     <PlayingCard value={flight.value} faceUp={flight.value !== null} size="md" fill />
   );
 
-  // Carte posée : elle couvre sa case le temps qu'on la remplace, sans bouger.
+  // Carte posée : elle couvre son emplacement le temps qu'on l'y remplace,
+  // sans bouger. Elle a un début, elle aussi — la défausse change de dessus
+  // plusieurs fois dans un même coup, et chaque cache prend la suite du
+  // précédent.
   if (hold) {
     return (
-      <div
+      <motion.div
         className="absolute"
         style={{
           left: fromRect.left,
@@ -111,9 +120,12 @@ function Flying({ flight, onDone }: { flight: Flight; onDone: (id: number) => vo
           width: fromRect.width,
           height: fromRect.height,
         }}
+        initial={{ opacity: delay > 0 ? 0 : 1 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.001, delay }}
       >
         {card}
-      </div>
+      </motion.div>
     );
   }
 
@@ -148,13 +160,31 @@ function Flying({ flight, onDone }: { flight: Flight; onDone: (id: number) => vo
           opacity: { duration: 0.08, delay },
         }}
       >
-        {/* Le saut par-dessus la table, superposé au trajet. */}
+        {/* Le saut par-dessus la table, superposé au trajet.
+            L'ombre dit l'altitude : elle s'écarte et se dilue quand la carte
+            monte, se resserre quand elle se pose. C'est ce qui fait la
+            différence entre une carte qui vole et une vignette qui glisse.
+            Et l'échelle continue un peu après l'arrivée : la carte arrive un
+            peu grande et se tasse sur place. Elle ne dépasse jamais sa cible —
+            elle a simplement un poids. */}
         <motion.div
           className="h-full w-full"
-          initial={{ y: 0, scale: 1 }}
-          animate={{ y: [0, -liftOf(Math.hypot(dx, dy)), 0], scale: [1, 1.07, 1] }}
-          transition={{ duration, delay, times: [0, 0.5, 1], ease: [...ARC_EASE] }}
-          style={{ filter: 'drop-shadow(0 12px 26px rgb(0 0 0 / 0.6))' }}
+          initial={{ y: 0, scale: 1, filter: LOW_SHADOW }}
+          animate={{
+            y: [0, -liftOf(Math.hypot(dx, dy)), 0],
+            scale: [1, 1.07, 1.1, 1],
+            filter: [LOW_SHADOW, HIGH_SHADOW, LOW_SHADOW],
+          }}
+          transition={{
+            y: { duration, delay, times: [0, 0.5, 1], ease: [...ARC_EASE] },
+            filter: { duration, delay, times: [0, 0.5, 1], ease: [...ARC_EASE] },
+            scale: {
+              duration: duration + IMPACT,
+              delay,
+              times: [0, (duration * 0.5) / (duration + IMPACT), duration / (duration + IMPACT), 1],
+              ease: 'easeOut',
+            },
+          }}
         >
           {card}
         </motion.div>
@@ -166,6 +196,8 @@ function Flying({ flight, onDone }: { flight: Flight; onDone: (id: number) => vo
 export function FlightLayer({ view }: { view: GameView }) {
   const [flights, setFlights] = useState<Flight[]>([]);
   const seen = useRef(-1);
+  /** Le dessus de la défausse à la version précédente : de quoi la recouvrir. */
+  const discardTop = useRef<number | null>(null);
 
   /** Mesure les deux bouts maintenant : après, la mise en page aura bougé. */
   const launch = useCallback((requests: FlightRequest[]) => {
@@ -192,9 +224,11 @@ export function FlightLayer({ view }: { view: GameView }) {
     // À l'arrivée sur la partie, `lastEvents` décrit un coup déjà joué : le
     // rejouer ferait voler une carte sans rapport avec ce qu'on vient de voir.
     const firstRender = seen.current === -1;
+    const before = discardTop.current;
     seen.current = view.version;
+    discardTop.current = view.discardTop;
     if (firstRender) return;
-    launch(flightsForEvents(view));
+    launch(flightsForEvents(view, before));
   }, [view, launch]);
 
   if (!flights.length) return null;

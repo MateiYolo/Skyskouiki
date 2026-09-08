@@ -71,6 +71,24 @@ export function onFlights(listener: Listener) {
 }
 
 /**
+ * Le cache de la défausse : ce que la pile montrait, gardé par-dessus elle
+ * jusqu'à ce que la carte suivante s'y pose.
+ *
+ * Même défaut que sur une case de grille, et il se voyait autant : la pile
+ * affiche déjà la carte d'après. Sans ce cache on lit le 12 sur la défausse
+ * pendant que le 12 met encore une demi-seconde à y arriver — la valeur est
+ * révélée avant son voyage, ce qui est précisément ce que le voyage devait
+ * raconter.
+ *
+ * Le cache passe *sous* la carte en vol : une carte se pose sur une pile, elle
+ * ne se glisse pas dessous. C'est pourquoi il s'émet toujours en premier.
+ */
+function coverDiscard(value: number | null, from: number, until: number): FlightRequest[] {
+  if (value === null || until <= from) return [];
+  return [{ from: DISCARD_PILE, to: DISCARD_PILE, value, delay: from, hold: until - from }];
+}
+
+/**
  * Un échange, dans l'ordre où il se lit : la carte arrive, se glisse sous celle
  * qu'elle remplace, et celle-là s'en va.
  *
@@ -108,7 +126,10 @@ export function flightsForAction(
     case 'discardHeld':
       return view.heldCard === null
         ? []
-        : [{ from: HAND, to: DISCARD_PILE, value: view.heldCard, delay: 0 }];
+        : [
+            ...coverDiscard(view.discardTop, 0, FLIGHT_DURATION),
+            { from: HAND, to: DISCARD_PILE, value: view.heldCard, delay: 0 },
+          ];
 
     case 'placeCard': {
       if (view.heldCard === null) return [];
@@ -116,7 +137,10 @@ export function flightsForAction(
       if (cell === undefined || cell === null) return [];
       // Ma propre carte cachée reste cachée : le serveur ne m'a pas encore dit
       // ce qu'il y avait dessous, et on n'invente pas une valeur.
-      return swap(cellAnchor(playerId, action.index), view.heldCard, cell.faceUp ? cell.value : null);
+      return [
+        ...coverDiscard(view.discardTop, 0, FLIGHT_NEXT + FLIGHT_DURATION),
+        ...swap(cellAnchor(playerId, action.index), view.heldCard, cell.faceUp ? cell.value : null),
+      ];
     }
 
     default:
@@ -190,10 +214,81 @@ export function revealHold(view: GameView): number {
   return (clearDelay(view) + flying + READ_BOARD) * 1000;
 }
 
-/** Ce qui doit voler quand *quelqu'un d'autre* vient de jouer. */
-export function flightsForEvents(view: GameView): FlightRequest[] {
+/**
+ * Ce qui se pose sur la défausse pendant ce lot, et quand.
+ *
+ * Une seule action peut y déposer plusieurs cartes : celle qu'un échange
+ * remplace, puis les trois d'une colonne éliminée. La pile n'affiche pourtant
+ * qu'une valeur — la dernière — dès l'arrivée de l'état. Il faut donc rejouer
+ * son dessus carte par carte, sinon la pile passe de son ancien sommet au
+ * sommet final sans jamais montrer ce qu'il y avait entre les deux.
+ *
+ * Rendu dans l'ordre chronologique, cache compris.
+ */
+function discardLandings(view: GameView, clearedAt: number): Array<{ value: number; at: number; mine: boolean }> {
+  const landings: Array<{ value: number; at: number; mine: boolean }> = [];
+  for (const event of view.lastEvents) {
+    switch (event.type) {
+      case 'drew':
+        // Une prise dans la défausse en retire le dessus : ce qui réapparaît
+        // dessous, seul le serveur le sait. Aucun cache possible, on renonce.
+        if (event.from === 'discard') return [];
+        break;
+      case 'discarded':
+        landings.push({ value: event.value, at: FLIGHT_DURATION, mine: event.playerId === view.you.id });
+        break;
+      case 'placed':
+        landings.push({
+          value: event.discarded,
+          at: FLIGHT_NEXT + FLIGHT_DURATION,
+          mine: event.playerId === view.you.id,
+        });
+        break;
+      case 'groupCleared':
+        event.cells.forEach((_, rank) => {
+          landings.push({
+            value: event.value,
+            at: clearedAt + rank * CLEAR_STAGGER + FLIGHT_DURATION,
+            mine: event.playerId === view.you.id,
+          });
+        });
+        break;
+      default:
+        break;
+    }
+  }
+  return landings.sort((a, b) => a.at - b.at);
+}
+
+/**
+ * Ce qui doit voler quand *quelqu'un d'autre* vient de jouer.
+ *
+ * `previousDiscardTop` est ce que la défausse montrait avant ce lot : la vue
+ * reçue montre déjà le résultat, et il faut de quoi la recouvrir le temps que
+ * la carte y arrive.
+ */
+export function flightsForEvents(
+  view: GameView,
+  previousDiscardTop: number | null = null,
+): FlightRequest[] {
   const out: FlightRequest[] = [];
   const cleared = clearDelay(view);
+
+  // Les caches d'abord : ils doivent passer sous les cartes qui se posent.
+  // Le tout premier n'est émis que si le coup n'est pas le mien — quand c'est
+  // moi qui joue, `flightsForAction` l'a déjà posé au doigt, une demi-seconde
+  // plus tôt, et le réémettre ici retarderait la pile d'autant.
+  const landings = discardLandings(view, cleared);
+  landings.forEach((landing, i) => {
+    const previous = landings[i - 1];
+    if (!previous && landing.mine) return;
+    const showing = previous?.value ?? previousDiscardTop;
+    // Un cache qui montre ce que la pile montre déjà ne cache rien : c'est le
+    // cas des trois cartes d'une colonne, toutes de la même valeur que le
+    // sommet final. Elles se posent sur elles-mêmes, et c'est très bien.
+    if (showing === view.discardTop) return;
+    out.push(...coverDiscard(showing, previous?.at ?? 0, landing.at));
+  });
 
   for (const event of view.lastEvents) {
     switch (event.type) {

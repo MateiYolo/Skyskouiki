@@ -5,10 +5,12 @@ import {
   HAND,
   cellAnchor,
   clearDelay,
+  flightsForAction,
   flightsForEvents,
   revealHold,
+  type FlightRequest,
 } from './flights';
-import { FLIGHT_DURATION, FLIGHT_NEXT } from './motion';
+import { CLEAR_STAGGER, FLIGHT_DURATION, FLIGHT_NEXT } from './motion';
 import type { GameEvent, GameView, ViewCell } from '@/lib/skyjo';
 
 /**
@@ -74,6 +76,13 @@ const placed = (playerId: string, index: number): GameEvent => ({
   discarded: 3,
 });
 
+/** Ce qui bouge, par opposition aux caches qui attendent sur place. */
+const moving = (flights: FlightRequest[]) => flights.filter((f) => !f.hold);
+
+/** Les caches posés sur la défausse, dans l'ordre où ils s'y succèdent. */
+const covers = (flights: FlightRequest[]) =>
+  flights.filter((f) => f.hold && f.from === DISCARD_PILE);
+
 const cleared = (
   playerId: string,
   cells: number[],
@@ -125,12 +134,13 @@ describe('flightsForEvents', () => {
     const view = makeView({ lastEvents: [placed(ME, 5), cleared(ME, [1, 5, 9])] });
     const flights = flightsForEvents(view);
 
-    expect(flights).toHaveLength(3);
-    expect(flights.map((f) => f.from)).toEqual([1, 5, 9].map((i) => cellAnchor(ME, i)));
-    expect(new Set(flights.map((f) => f.to))).toEqual(new Set([DISCARD_PILE]));
+    const flying = moving(flights);
+    expect(flying).toHaveLength(3);
+    expect(flying.map((f) => f.from)).toEqual([1, 5, 9].map((i) => cellAnchor(ME, i)));
+    expect(new Set(flying.map((f) => f.to))).toEqual(new Set([DISCARD_PILE]));
     // En éventail : on compte les cartes qui partent.
-    expect(flights[0].delay).toBeLessThan(flights[1].delay);
-    expect(flights[1].delay).toBeLessThan(flights[2].delay);
+    expect(flying[0].delay).toBeLessThan(flying[1].delay);
+    expect(flying[1].delay).toBeLessThan(flying[2].delay);
   });
 
   it('laisse l’échange se terminer avant de vider la colonne', () => {
@@ -152,9 +162,92 @@ describe('flightsForEvents', () => {
     const view = makeView({
       lastEvents: [cleared(THEM, [8, 9, 11], 'row')],
     });
-    expect(flightsForEvents(view).map((f) => f.from)).toEqual(
+    expect(moving(flightsForEvents(view)).map((f) => f.from)).toEqual(
       [8, 9, 11].map((i) => cellAnchor(THEM, i)),
     );
+  });
+});
+
+describe('le dessus de la défausse', () => {
+  it('garde l’ancienne carte visible jusqu’à ce que la nouvelle s’y pose', () => {
+    const view = makeView({
+      discardTop: 4,
+      lastEvents: [{ type: 'discarded', playerId: THEM, value: 4 }],
+    });
+    const flights = flightsForEvents(view, 9);
+
+    // La pile affiche déjà le 4 : sans le cache, il est lu avant d'arriver.
+    expect(covers(flights)).toEqual([
+      { from: DISCARD_PILE, to: DISCARD_PILE, value: 9, delay: 0, hold: FLIGHT_DURATION },
+    ]);
+    // Et le cache passe sous la carte qui se pose, pas dessus.
+    expect(flights.indexOf(covers(flights)[0])).toBeLessThan(
+      flights.findIndex((f) => !f.hold && f.to === DISCARD_PILE),
+    );
+  });
+
+  it('rejoue le dessus carte par carte quand plusieurs s’y posent', () => {
+    // Un échange qui déclenche une colonne : la carte remplacée se pose, puis
+    // les trois de la colonne. La pile n'affiche que la dernière.
+    // Après la colonne, la pile affiche le 7 : c'est la dernière carte posée.
+    const view = makeView({
+      discardTop: 7,
+      lastEvents: [placed(THEM, 5), cleared(THEM, [1, 5, 9])],
+    });
+    const [first, second, ...rest] = covers(flightsForEvents(view, 9));
+
+    expect(rest).toEqual([]);
+    // D'abord l'ancien dessus, jusqu'à ce que la carte remplacée arrive.
+    expect(first).toMatchObject({ value: 9, delay: 0 });
+    expect(first.delay + first.hold!).toBe(FLIGHT_NEXT + FLIGHT_DURATION);
+    // Puis la carte remplacée, jusqu'à la première carte de la colonne.
+    expect(second).toMatchObject({ value: 3, delay: FLIGHT_NEXT + FLIGHT_DURATION });
+    expect(second.delay + second.hold!).toBe(clearDelay(view) + FLIGHT_DURATION);
+  });
+
+  it('ne recouvre pas deux fois mon propre coup, déjà couvert au doigt', () => {
+    const view = makeView({
+      discardTop: 7,
+      lastEvents: [placed(ME, 5), cleared(ME, [1, 5, 9])],
+    });
+    const list = covers(flightsForEvents(view, 9));
+
+    // `flightsForAction` a posé le premier cache une demi-seconde plus tôt ;
+    // le réémettre ici retarderait la pile d'un aller-retour réseau.
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ value: 3, delay: FLIGHT_NEXT + FLIGHT_DURATION });
+  });
+
+  it('recouvre au doigt, sans attendre le serveur', () => {
+    const view = makeView({ discardTop: 9, heldCard: 6, heldFrom: 'draw', you: { id: ME, isHost: true, isCurrent: true } });
+    expect(covers(flightsForAction(view, { type: 'discardHeld' }, ME))).toEqual([
+      { from: DISCARD_PILE, to: DISCARD_PILE, value: 9, delay: 0, hold: FLIGHT_DURATION },
+    ]);
+  });
+
+  it('renonce à recouvrir quand quelqu’un vient d’y prendre une carte', () => {
+    // Le dessus a sauté : ce qui réapparaît dessous, seul le serveur le sait.
+    const view = makeView({
+      heldCard: 9,
+      heldFrom: 'discard',
+      lastEvents: [{ type: 'drew', playerId: THEM, from: 'discard' }],
+    });
+    expect(covers(flightsForEvents(view, 9))).toEqual([]);
+  });
+
+  it('ne pose pas de cache là où la pile ne change pas', () => {
+    // Les trois cartes d'une colonne ont la même valeur que le sommet final :
+    // elles se posent sur elles-mêmes. Seule la première a quelque chose à
+    // cacher — l'ancien dessus.
+    const view = makeView({ discardTop: 7, lastEvents: [cleared(THEM, [1, 5, 9])] });
+    const list = covers(flightsForEvents(view, 9));
+
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ value: 9, delay: 0 });
+    expect(list[0].hold).toBe(clearDelay(view) + FLIGHT_DURATION);
+    // Les cartes, elles, restent espacées.
+    const flying = moving(flightsForEvents(view, 9));
+    expect(flying[1].delay - flying[0].delay).toBeCloseTo(CLEAR_STAGGER);
   });
 });
 

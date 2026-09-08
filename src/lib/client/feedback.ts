@@ -117,16 +117,29 @@ const HAPTICS: Record<Cue, number | number[]> = {
   lose: [0, 90],
 };
 
-/** Joue un retour sonore + haptique. Silencieux si l'audio n'a pas été initialisé. */
-export function cue(kind: Cue) {
-  try {
-    navigator.vibrate?.(HAPTICS[kind]);
-  } catch {
-    // vibration non supportée
-  }
+/**
+ * Joue un retour sonore + haptique. Silencieux si l'audio n'a pas été initialisé.
+ *
+ * `delay` (en secondes) sert à faire coïncider le son avec ce qu'il commente.
+ * Un coup produit son événement tout de suite, mais la carte, elle, met une
+ * demi-seconde à se poser : joué à l'arrivée de l'événement, le « toc » du
+ * bois précède la carte de tout son voyage, et l'oreille corrige l'œil au
+ * lieu de le confirmer. L'AudioContext sait programmer une note dans le
+ * futur — autant s'en servir plutôt que d'empiler des minuteurs.
+ */
+export function cue(kind: Cue, delay = 0) {
+  const buzz = () => {
+    try {
+      navigator.vibrate?.(HAPTICS[kind]);
+    } catch {
+      // vibration non supportée
+    }
+  };
+  if (delay > 0) setTimeout(buzz, delay * 1000);
+  else buzz();
 
   if (muted || !ctx) return;
-  const t = ctx.currentTime;
+  const t = ctx.currentTime + delay;
 
   switch (kind) {
     case 'tap':
