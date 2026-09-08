@@ -13,7 +13,7 @@ export const GRID_SIZE = ROWS * COLS; // 12
 /** Une case de la grille. `null` = carte retirée (colonne éliminée). */
 export type Cell = { value: number; faceUp: boolean } | null;
 
-/** Une colonne (3 cartes) ou une ligne (4 cartes) entièrement identique. */
+/** Une colonne ou une ligne dont toutes les cartes encore présentes sont identiques. */
 export type GroupKind = 'column' | 'row';
 
 export type Phase =
@@ -52,7 +52,15 @@ export type GameEvent =
   | { type: 'placed'; playerId: string; index: number; placed: number; discarded: number }
   | { type: 'discarded'; playerId: string; value: number }
   | { type: 'flipped'; playerId: string; index: number; value: number }
-  | { type: 'groupCleared'; playerId: string; kind: GroupKind; index: number; value: number }
+  | {
+      type: 'groupCleared';
+      playerId: string;
+      kind: GroupKind;
+      index: number;
+      value: number;
+      /** Les cases réellement retirées : sur une ligne trouée, elles ne sont pas quatre. */
+      cells: number[];
+    }
   | { type: 'pileReshuffled' }
   | { type: 'lastTurnTriggered'; playerId: string }
   | { type: 'roundOver'; scores: RoundScore[] }

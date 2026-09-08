@@ -44,9 +44,14 @@ export interface GameView {
   discardTop: number | null;
   discardCount: number;
   /**
-   * Carte en main. Visible de tous si elle vient de la défausse — sur une vraie
-   * table, tout le monde a vu quelle carte le joueur y a prise. Secrète si elle
-   * vient de la pioche, jusqu'à ce qu'elle soit posée ou jetée.
+   * Carte en main, visible de tous — y compris quand elle sort de la pioche.
+   *
+   * C'est un écart assumé avec le jeu de société, où l'on regarde sa pioche à
+   * l'abri. Sur deux téléphones, la carte en main est le pivot du tour : c'est
+   * elle qui explique pourquoi l'adversaire pose ici plutôt que là, et une
+   * carte grise au milieu de la table ne raconte rien à celui qui attend. Elle
+   * ne donne d'ailleurs aucun avantage : la décision appartient à celui qui la
+   * tient, l'autre ne fait que comprendre le coup pendant qu'il se joue.
    */
   heldCard: number | null;
   heldFrom: 'draw' | 'discard' | null;
@@ -122,7 +127,7 @@ export function toView(state: GameState, viewerId: string, since?: number): Game
     drawPileCount: state.drawPile.length,
     discardTop: state.discardPile.at(-1) ?? null,
     discardCount: state.discardPile.length,
-    heldCard: isCurrent || state.heldFrom === 'discard' ? state.heldCard : null,
+    heldCard: state.heldCard,
     heldFrom: state.heldFrom,
     roundCloserId: state.roundCloserId,
     finalTurnsLeft: state.finalTurnsLeft,

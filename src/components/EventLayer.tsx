@@ -31,6 +31,8 @@ interface Hero {
   title: string;
   subtitle?: string;
   tone: 'good' | 'warn';
+  /** Combien de temps elle reste, en millisecondes. Par défaut, le temps de la lire. */
+  hold?: number;
 }
 
 let nextId = 1;
@@ -57,7 +59,9 @@ export function EventLayer({ view }: { view: GameView }) {
         case 'groupCleared': {
           cue('clear');
           const group = event.kind === 'row' ? 'Ligne' : 'Colonne';
-          const count = event.kind === 'row' ? 'Quatre' : 'Trois';
+          // Le compte vient des cases réellement retirées : une ligne amputée
+          // d'une colonne déjà éliminée n'en aligne que trois.
+          const count = event.cells.length === 4 ? 'Quatre' : 'Trois';
           freshHero = mine(event.playerId)
             ? {
                 id: nextId++,
@@ -111,6 +115,18 @@ export function EventLayer({ view }: { view: GameView }) {
         case 'initialFlip':
           cue('flip');
           break;
+        // Fin de manche : la table se retourne en entier et les scores
+        // attendent (cf. `useScoreDelay`). Sans un mot ici, ce temps-là
+        // ressemblerait à une application qui a décroché.
+        case 'roundOver':
+          freshHero = {
+            id: nextId++,
+            title: 'Manche terminée',
+            subtitle: 'On retourne tout',
+            tone: 'warn',
+            hold: 2600,
+          };
+          break;
         case 'gameOver':
           cue(event.winnerId === view.you.id ? 'win' : 'lose');
           break;
@@ -149,7 +165,7 @@ export function EventLayer({ view }: { view: GameView }) {
 
   useEffect(() => {
     if (!hero) return;
-    const timer = setTimeout(() => setHero(null), hero.subtitle ? 2000 : 1100);
+    const timer = setTimeout(() => setHero(null), hero.hold ?? (hero.subtitle ? 2000 : 1100));
     return () => clearTimeout(timer);
   }, [hero]);
 

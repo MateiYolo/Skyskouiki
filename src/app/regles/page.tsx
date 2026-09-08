@@ -4,7 +4,7 @@ import { PlayingCard } from '@/components/PlayingCard';
 
 export const metadata: Metadata = {
   title: 'Règles · Skyskouiki',
-  description: 'Les règles officielles du Skyjo, en français, plus une règle maison.',
+  description: 'Les règles officielles du Skyjo, en français, plus deux règles maison.',
 };
 
 function Section({
@@ -48,8 +48,8 @@ export default function RulesPage() {
 
       <h1 className="text-3xl font-black tracking-tight">Les règles</h1>
       <p className="mt-2 text-sm text-ink-dim">
-        Celles du jeu original, plus une règle maison — signalée là où elle s’applique. But du
-        jeu&nbsp;: avoir le plus petit total.
+        Celles du jeu original, plus deux règles maison — signalées là où elles s’appliquent. But
+        du jeu&nbsp;: avoir le plus petit total.
       </p>
 
       <Section n="01" title="Le matériel">
@@ -97,7 +97,21 @@ export default function RulesPage() {
         </ol>
       </Section>
 
-      <Section n="04" title="Les colonnes">
+      <Section n="04" title="La carte en main se voit" house>
+        <p>
+          Ici, la carte que tu tiens est posée <Key>face visible</Key> au milieu de la table, même
+          quand elle sort de la pioche. Tout le monde la voit, tout le monde sait ce que tu es en
+          train de peser.
+        </p>
+        <p>
+          Autour d’une vraie table, on regarde sa pioche à l’abri de sa main. Sur deux téléphones,
+          ça donnait une carte grise au milieu de l’écran et un adversaire qui pose sans qu’on
+          comprenne pourquoi&nbsp;: la moitié du plaisir de regarder l’autre jouer partait avec.
+          Ça ne t’enlève rien&nbsp;— la décision reste la tienne, l’autre ne fait que suivre.
+        </p>
+      </Section>
+
+      <Section n="05" title="Les colonnes">
         <p>
           Trois cartes <Key>identiques face visible dans une même colonne</Key>&nbsp;? Les trois
           disparaissent de ta grille et filent à la défausse. Elles ne comptent plus un seul point.
@@ -108,15 +122,22 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="05" title="Les lignes" house>
+      <Section n="06" title="Les lignes" house>
         <p>
-          Ici, une <Key>ligne entière de quatre cartes identiques</Key> saute aussi. Ce n’est{' '}
+          Ici, une <Key>ligne entière de cartes identiques</Key> saute aussi. Ce n’est{' '}
           <Key>pas</Key> dans les règles du jeu de société&nbsp;: là-bas, seules les colonnes
           comptent. Si tu joues avec les vraies cartes un jour, oublie cette section.
         </p>
         <p>
-          Il faut bien les quatre. Trois cartes identiques côte à côte dans une ligne ne suffisent
-          pas — sinon les manches tourneraient trop court.
+          Il faut la <Key>ligne entière</Key>. Sur une grille intacte, ça veut dire les quatre —
+          trois cartes identiques côte à côte et une quatrième différente ne suffisent pas, sinon
+          les manches tourneraient trop court.
+        </p>
+        <p>
+          En revanche, une <Key>colonne déjà éliminée ne compte plus</Key>. Si son trou coupe ta
+          ligne, il reste trois cases&nbsp;: trois cartes identiques les remplissent entièrement, et
+          la ligne saute. Un trou n’est pas une carte qui dépareille — c’est une carte qui n’est
+          plus là.
         </p>
         <p>
           Une carte peut compléter une colonne et une ligne du même coup&nbsp;: les deux partent, et
@@ -124,7 +145,7 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="06" title="Fin de manche">
+      <Section n="07" title="Fin de manche">
         <p>
           Dès qu’un joueur a <Key>retourné toutes ses cartes</Key>, la manche se termine&nbsp;: chacun
           des autres joue <Key>encore un tour</Key>, puis tout le monde révèle sa grille.
@@ -135,7 +156,7 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="07" title="Le comptage (et le piège)">
+      <Section n="08" title="Le comptage (et le piège)">
         <p>Chacun additionne les cartes qui lui restent. Les négatives se soustraient.</p>
         <p className="rounded-xl border border-danger/30 bg-danger/10 p-3 text-ink">
           <Key>La pénalité.</Key> Le joueur qui a fermé la manche <Key>double ses points</Key> s’il
@@ -148,14 +169,14 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="08" title="Fin de partie">
+      <Section n="09" title="Fin de partie">
         <p>
           On enchaîne les manches. Dès que quelqu’un atteint <Key>100 points ou plus</Key>, la partie
           s’arrête à la fin de cette manche. Le <Key>plus petit total</Key> l’emporte.
         </p>
       </Section>
 
-      <Section n="09" title="Cas particulier">
+      <Section n="10" title="Cas particulier">
         <p>
           Si la pioche s’épuise, on mélange la défausse — sauf sa carte du dessus — pour en refaire
           une.

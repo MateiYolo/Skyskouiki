@@ -3,7 +3,7 @@
 import { motion } from 'motion/react';
 import { EmptySlot, PlayingCard, type CardSize } from './PlayingCard';
 import { cellAnchor } from '@/lib/client/flights';
-import { SETTLE } from '@/lib/client/motion';
+
 import type { ViewCell } from '@/lib/skyjo';
 
 /**
@@ -25,8 +25,11 @@ import type { ViewCell } from '@/lib/skyjo';
 
 /** Le groupe qui vient de sauter chez ce joueur. */
 export interface ClearEcho {
+  /** Les cases réellement vidées — pas la géométrie du groupe. */
   indices: number[];
   value: number;
+  /** Combien de temps (en secondes) les cartes restent visibles avant de partir. */
+  delay: number;
 }
 
 export interface PlayerGridProps {
@@ -72,17 +75,28 @@ function TouchedRing({ radius }: { radius: string }) {
 }
 
 /**
- * Le groupe qui saute. La carte reste en place le temps qu'on l'identifie, puis
- * s'en va vers le haut en se réduisant — le trou qu'elle laisse est déjà là,
- * dessous.
+ * Le groupe qui saute.
+ *
+ * Les cartes sont déjà parties de l'état du jeu : sans ce fantôme, trois cases
+ * se videraient d'un coup et personne ne saurait *lesquelles* étaient
+ * identiques, ni pourquoi. Elles restent donc en place, cerclées, le temps
+ * qu'on les lise — puis elles disparaissent d'un coup, à l'instant précis où
+ * la couche de vol les fait décoller vers la défausse (`clearDelay`). La carte
+ * ne s'efface pas : elle change de main.
  */
-function ClearGhost({ value, size }: { value: number; size: CardSize }) {
+function ClearGhost({ value, size, delay }: { value: number; size: CardSize; delay: number }) {
+  const total = delay + 0.1;
+  const gone = delay / total;
   return (
     <motion.div
       className="pointer-events-none absolute inset-0 z-10"
-      initial={{ opacity: 1, scale: 1, y: 0 }}
-      animate={{ opacity: 0, scale: 0.6, y: -14 }}
-      transition={{ ...SETTLE, delay: 0.35 }}
+      initial={{ opacity: 1, scale: 1 }}
+      animate={{ opacity: [1, 1, 1, 0], scale: [1, 1.06, 1.06, 1] }}
+      transition={{
+        duration: total,
+        times: [0, Math.min(0.3, gone / 2), gone, 1],
+        ease: 'easeOut',
+      }}
     >
       <PlayingCard value={value} faceUp size={size} intent="target" />
     </motion.div>
@@ -118,7 +132,12 @@ export function PlayerGrid({
             >
               <EmptySlot size={size} />
               {clearing?.has(index) && (
-                <ClearGhost key={echoKey} value={cleared!.value} size={size} />
+                <ClearGhost
+                  key={echoKey}
+                  value={cleared!.value}
+                  size={size}
+                  delay={cleared!.delay}
+                />
               )}
             </div>
           );

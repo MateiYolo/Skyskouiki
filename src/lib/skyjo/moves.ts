@@ -49,13 +49,22 @@ export function lastMove(view: GameView): LastMove | null {
   return null;
 }
 
-/** Ce que tient le joueur actif, tel que `viewerId` a le droit de le savoir. */
+/**
+ * Ce que tient le joueur actif, en clair, pour ceux qui le regardent jouer.
+ *
+ * La valeur est annoncée dans les deux cas : la carte en main est publique,
+ * qu'elle vienne de la pioche ou de la défausse (cf. `GameView.heldCard`). Ce
+ * qui reste à deviner, c'est ce qu'il va en faire.
+ */
 export function heldSummary(view: GameView): { text: string; revealed: boolean } | null {
   if (view.heldFrom === null || view.currentPlayerId === null) return null;
   if (view.currentPlayerId === view.you.id) return null;
 
   const name = view.players.find((p) => p.id === view.currentPlayerId)?.name ?? 'Quelqu’un';
-  return view.heldFrom === 'discard'
-    ? { text: `${name} a pris la défausse`, revealed: true }
-    : { text: `${name} a pioché`, revealed: false };
+  const card = view.heldCard;
+  const where = view.heldFrom === 'discard' ? 'a pris la défausse' : 'a pioché';
+  return {
+    text: card === null ? `${name} ${where}` : `${name} ${where} : ${card}`,
+    revealed: card !== null,
+  };
 }

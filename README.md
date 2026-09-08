@@ -7,10 +7,14 @@ Règles officielles, y compris les deux qui font le sel du jeu : l'élimination
 des colonnes de trois cartes identiques, et le doublement du score de celui qui
 ferme la manche sans avoir, à lui seul, le plus petit total.
 
-Une seule règle maison s'y ajoute, assumée : **une ligne entière de quatre
-cartes identiques saute elle aussi**. Le jeu de société ne connaît que les
-colonnes ; la page Règles de l'application signale l'écart pour qu'on ne
-l'emporte pas par erreur sur une vraie table.
+Deux règles maison s'y ajoutent, assumées. **Une ligne entière de cartes
+identiques saute elle aussi** — les quatre sur une grille intacte, les trois
+qui restent quand une colonne éliminée a fait un trou dedans : un trou n'est
+pas une carte qui dépareille. Et **la carte en main est publique**, même sortie
+de la pioche : à distance, une carte grise au milieu de la table ne raconte
+rien de ce que l'adversaire est en train de peser. Le jeu de société ne connaît
+ni l'une ni l'autre ; la page Règles de l'application signale les deux écarts
+pour qu'on ne les emporte pas par erreur sur une vraie table.
 
 ## Comment ça marche
 
@@ -33,8 +37,10 @@ mélange déterministe par graine, et c'est là que vivent toutes les règles.
 jamais l'état complet d'une partie. Il envoie une intention, le serveur la
 valide contre le moteur, écrit le nouvel état, puis renvoie une projection
 expurgée (`toView`) : les cartes face cachée y sont présentes mais sans leur
-valeur, la pioche se résume à un compteur, et la carte en main n'est visible que
-de son porteur. Tricher demanderait de deviner l'état, pas de lire une réponse.
+valeur, et la pioche se résume à un compteur. La carte en main, elle, est
+publique — c'est une règle maison, pas un oubli : ce qui reste secret, c'est
+l'ordre de la pioche et le dos des grilles. Tricher demanderait de deviner
+l'état, pas de lire une réponse.
 
 **Le temps réel ne transporte rien de secret.** Deux tables : `skyjo.games`
 (méta publique — code, version, à qui de jouer) diffusée en temps réel, et
@@ -82,15 +88,22 @@ rôle de service. Le nettoyage des parties abandonnées se fait avec
 ## Tests
 
 ```bash
-npm test          # 36 tests du moteur : règles, comptage, confidentialité
+npm test          # règles, comptage, confidentialité, chronologie des animations
 npm run typecheck
 npm run smoke     # partie complète jouée par HTTP (serveur de dev requis)
 ```
 
 Le fichier `src/lib/skyjo/engine.test.ts` sert aussi de spécification lisible :
 chaque règle y a son test nommé en français, les officielles comme la maison —
-dont un test qui vérifie que trois cartes identiques côte à côte dans une ligne
-ne suffisent *pas*.
+dont un test qui vérifie que trois cartes identiques dans une ligne intacte ne
+suffisent *pas*, et un autre que les mêmes trois cartes suffisent dès qu'une
+colonne éliminée a raccourci la ligne.
+
+`src/lib/client/flights.test.ts` teste l'autre moitié : la **chronologie** d'un
+coup. Une carte prise, une carte posée, une carte jetée et une colonne qui
+saute, jouées en même temps, font un clignotement ; c'est leur ordre qui les
+rend lisibles, et deux calques indépendants doivent s'accorder à la
+milliseconde pour qu'une carte éliminée ne s'affiche pas deux fois.
 
 ## Arborescence
 

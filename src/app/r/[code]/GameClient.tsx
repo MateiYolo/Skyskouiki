@@ -12,6 +12,7 @@ import { TableCenter } from '@/components/TableCenter';
 import { GameOverPanel, RoundSummary } from '@/components/Overlays';
 import { useMoveEcho } from '@/lib/client/echo';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
+import { revealHold } from '@/lib/client/flights';
 import { MOVE } from '@/lib/client/motion';
 import { armAudio, cue, initAudio, isMuted, setMuted } from '@/lib/client/feedback';
 import { useGame } from '@/lib/client/useGame';
@@ -48,6 +49,34 @@ function prompt(view: GameView): { title: string; hint: string } {
     case 'gameOver':
       return { title: 'Partie terminée', hint: '' };
   }
+}
+
+/**
+ * Retient son contenu le temps que la table finisse de bouger.
+ *
+ * La manche se termine sur le coup le plus chargé de la partie : une dernière
+ * carte posée, tous les dos qui se retournent chez chacun, et parfois une
+ * colonne qui saute au passage. Le serveur envoie tout ça dans la même
+ * version — poser la feuille de scores par-dessus, c'est escamoter la seule
+ * chose que tout le monde attendait : ce qu'il y avait sous les dernières
+ * cartes.
+ *
+ * Le délai est figé au montage : les rafraîchissements qui suivent (un joueur
+ * qui rejoint, le sondage de secours) ne doivent pas relancer le compte à
+ * rebours. Et c'est le démontage qui remet tout à zéro pour la manche
+ * suivante — il n'y a pas d'état à réarmer.
+ */
+function Delayed({ by, children }: { by: number; children: React.ReactNode }) {
+  const [wait] = useState(by);
+  const [open, setOpen] = useState(wait <= 0);
+
+  useEffect(() => {
+    if (open) return;
+    const timer = setTimeout(() => setOpen(true), wait);
+    return () => clearTimeout(timer);
+  }, [wait, open]);
+
+  return open ? <>{children}</> : null;
 }
 
 export function GameClient({ code }: { code: string }) {
@@ -273,10 +302,14 @@ export function GameClient({ code }: { code: string }) {
 
       <AnimatePresence>
         {view.phase === 'roundOver' && (
-          <RoundSummary view={view} busy={busy} onNext={() => void run({ type: 'nextRound' })} />
+          <Delayed by={revealHold(view)}>
+            <RoundSummary view={view} busy={busy} onNext={() => void run({ type: 'nextRound' })} />
+          </Delayed>
         )}
         {view.phase === 'gameOver' && (
-          <GameOverPanel view={view} busy={busy} onRestart={() => void run({ type: 'playAgain' })} />
+          <Delayed by={revealHold(view)}>
+            <GameOverPanel view={view} busy={busy} onRestart={() => void run({ type: 'playAgain' })} />
+          </Delayed>
         )}
       </AnimatePresence>
 
