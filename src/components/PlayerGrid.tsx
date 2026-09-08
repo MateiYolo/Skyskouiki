@@ -3,6 +3,7 @@
 import { motion } from 'motion/react';
 import { EmptySlot, PlayingCard, type CardSize } from './PlayingCard';
 import { cellAnchor } from '@/lib/client/flights';
+import { CLEAR_STAGGER } from '@/lib/client/motion';
 
 import type { ViewCell } from '@/lib/skyjo';
 
@@ -84,19 +85,29 @@ function TouchedRing({ radius }: { radius: string }) {
  * la couche de vol les fait décoller vers la défausse (`clearDelay`). La carte
  * ne s'efface pas : elle change de main.
  */
-function ClearGhost({ value, size, delay }: { value: number; size: CardSize; delay: number }) {
+function ClearGhost({
+  value,
+  size,
+  delay,
+  rank,
+}: {
+  value: number;
+  size: CardSize;
+  delay: number;
+  /** Rang de la carte dans le groupe : le coup d'œil part d'un bout à l'autre. */
+  rank: number;
+}) {
   const total = delay + 0.1;
   const gone = delay / total;
+  // Le sursaut parcourt le groupe au lieu de le secouer d'un bloc : c'est ce
+  // qui fait lire « ces trois-là, ensemble » plutôt que « ces trois-là ».
+  const wave = Math.min(0.34, (0.12 + rank * CLEAR_STAGGER) / total);
   return (
     <motion.div
       className="pointer-events-none absolute inset-0 z-10"
       initial={{ opacity: 1, scale: 1 }}
-      animate={{ opacity: [1, 1, 1, 0], scale: [1, 1.06, 1.06, 1] }}
-      transition={{
-        duration: total,
-        times: [0, Math.min(0.3, gone / 2), gone, 1],
-        ease: 'easeOut',
-      }}
+      animate={{ opacity: [1, 1, 1, 0], scale: [1, 1.08, 1.04, 1] }}
+      transition={{ duration: total, times: [0, wave, gone, 1], ease: 'easeOut' }}
     >
       <PlayingCard value={value} faceUp size={size} intent="target" />
     </motion.div>
@@ -137,6 +148,7 @@ export function PlayerGrid({
                   value={cleared!.value}
                   size={size}
                   delay={cleared!.delay}
+                  rank={cleared!.indices.indexOf(index)}
                 />
               )}
             </div>

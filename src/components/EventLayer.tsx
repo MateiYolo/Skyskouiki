@@ -3,7 +3,8 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { cue } from '@/lib/client/feedback';
-import { MOVE, SETTLE } from '@/lib/client/motion';
+import { clearDelay } from '@/lib/client/flights';
+import { FLIGHT_DURATION, MOVE, SETTLE } from '@/lib/client/motion';
 import type { GameEvent, GameView } from '@/lib/skyjo';
 
 /**
@@ -57,7 +58,9 @@ export function EventLayer({ view }: { view: GameView }) {
     for (const event of view.lastEvents as GameEvent[]) {
       switch (event.type) {
         case 'groupCleared': {
-          cue('clear');
+          // La petite gamme monte pendant que les cartes s'en vont, une note
+          // par carte — pas une seconde et demie avant qu'elles ne bougent.
+          cue('clear', clearDelay(view));
           const group = event.kind === 'row' ? 'Ligne' : 'Colonne';
           // Le compte vient des cases réellement retirées : une ligne amputée
           // d'une colonne déjà éliminée n'en aligne que trois.
@@ -105,11 +108,13 @@ export function EventLayer({ view }: { view: GameView }) {
         case 'drew':
           if (!mine(view.currentPlayerId ?? '')) cue('draw');
           break;
+        // Le poids d'une carte se fait entendre quand elle touche la table,
+        // pas quand le serveur annonce qu'elle va la toucher.
         case 'placed':
-          cue('place');
+          cue('place', FLIGHT_DURATION);
           break;
         case 'discarded':
-          cue('discard');
+          cue('discard', FLIGHT_DURATION);
           break;
         case 'flipped':
         case 'initialFlip':
