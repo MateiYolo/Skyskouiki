@@ -188,6 +188,44 @@ button,
   font-size: 20cqw;
 }
 
+/* Une case vidée : la colonne (ou la ligne) est partie à la défausse et ne
+   compte plus. C'est une information de jeu à part entière — c'est elle qui dit
+   qui a déjà nettoyé sa grille — et un trou à peine plus clair que le fond ne
+   la donnait à personne : sur un téléphone en plein jour, la case disparaissait
+   purement et simplement.
+
+   D'où trois signaux qui ne dépendent pas les uns des autres : des hachures,
+   qui se voient même en vignette ; un liseré tireté franc ; et un léger retrait,
+   pour que la case se lise en creux entre les cartes plutôt qu'en concurrence
+   avec elles.
+
+   Les hachures montent vers la droite, à l'exact opposé de celles du dos de
+   carte : parallèles, les deux motifs se lisaient comme une même famille et on
+   hésitait entre « vidée » et « pas encore retournée » — soit précisément
+   l'information qu'on venait chercher. */
+.empty-slot {
+  border: 1.5px dashed rgb(255 255 255 / 0.34);
+  background-color: rgb(255 255 255 / 0.045);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgb(255 255 255 / 0.1) 0 2px,
+    transparent 2px 8px
+  );
+  box-shadow: inset 0 1px 4px rgb(0 0 0 / 0.45);
+  transform: scale(0.94);
+}
+
+/* En vignette, un tireté d'un pixel et demi se referme en trait plein et les
+   hachures se brouillent : on desserre l'un et on éclaircit l'autre. */
+.empty-slot-xs {
+  border-width: 1px;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgb(255 255 255 / 0.13) 0 1.5px,
+    transparent 1.5px 5px
+  );
+}
+
 /* Ma grille est un carré bridé par la largeur de l'écran : au-delà, la hauteur
    en trop ne lui sert à rien. On la plafonne, et le flex rend le reste aux
    adversaires — c'est là que leurs cartes gagnent leur lisibilité, sans rien
@@ -201,6 +239,13 @@ button,
    elle-même au lieu de la grille. */
 .turn-glow {
   box-shadow: inset 0 0 0 2px rgb(255 204 77 / 0.75), inset 0 0 40px rgb(255 204 77 / 0.14);
+}
+
+/* Le même liseré, mais c'est le dernier tour de la manche : il vire au rouge.
+   Le jaune veut dire « à toi », le rouge « à toi, et c'est la dernière fois » —
+   deux consignes différentes qui ne peuvent pas porter la même couleur. */
+.turn-glow.is-final {
+  box-shadow: inset 0 0 0 2px rgb(255 90 95 / 0.8), inset 0 0 46px rgb(255 90 95 / 0.18);
 }
 
 /* La bande d'adversaires défile : un fondu à droite dit qu'il y a une suite. */

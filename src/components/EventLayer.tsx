@@ -31,10 +31,24 @@ interface Hero {
   id: number;
   title: string;
   subtitle?: string;
-  tone: 'good' | 'warn';
+  /** `alert` est réservé à la fermeture de manche : c'est le seul événement
+      qui change les règles du coup suivant. */
+  tone: 'good' | 'warn' | 'alert';
   /** Combien de temps elle reste, en millisecondes. Par défaut, le temps de la lire. */
   hold?: number;
 }
+
+const HERO_EDGE: Record<Hero['tone'], string> = {
+  good: 'rgb(74 222 128 / 0.45)',
+  warn: 'rgb(255 204 77 / 0.45)',
+  alert: 'rgb(255 90 95 / 0.7)',
+};
+
+const HERO_INK: Record<Hero['tone'], string> = {
+  good: 'var(--color-good)',
+  warn: 'var(--color-accent)',
+  alert: 'var(--color-danger)',
+};
 
 let nextId = 1;
 
@@ -80,6 +94,10 @@ export function EventLayer({ view }: { view: GameView }) {
               };
           break;
         }
+        // L'annonce la plus importante de la manche, et la seule qu'on ne peut
+        // pas rattraper : après elle, il ne reste qu'un coup à jouer. Elle reste
+        // donc nettement plus longtemps que les autres, en rouge — et le bandeau
+        // du milieu de table prend le relais pour tout le tour.
         case 'lastTurnTriggered': {
           cue('lastTurn');
           freshHero = mine(event.playerId)
@@ -87,13 +105,15 @@ export function EventLayer({ view }: { view: GameView }) {
                 id: nextId++,
                 title: 'Tu fermes la manche',
                 subtitle: 'Le plus petit total, sinon il double',
-                tone: 'warn',
+                tone: 'alert',
+                hold: 3400,
               }
             : {
                 id: nextId++,
-                title: 'Dernier tour',
-                subtitle: `${nameOf(event.playerId)} a tout retourné`,
-                tone: 'warn',
+                title: 'Dernier tour !',
+                subtitle: `${nameOf(event.playerId)} a tout retourné — un seul coup, puis on compte`,
+                tone: 'alert',
+                hold: 3400,
               };
           break;
         }
@@ -201,9 +221,9 @@ export function EventLayer({ view }: { view: GameView }) {
             key={hero.id}
             className="max-w-[17rem] rounded-2xl border px-4 py-2 text-center backdrop-blur-md"
             style={{
-              borderColor:
-                hero.tone === 'good' ? 'rgb(74 222 128 / 0.45)' : 'rgb(255 204 77 / 0.45)',
+              borderColor: HERO_EDGE[hero.tone],
               background: 'rgb(11 7 22 / 0.85)',
+              boxShadow: hero.tone === 'alert' ? '0 0 24px rgb(255 90 95 / 0.28)' : undefined,
             }}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -212,7 +232,7 @@ export function EventLayer({ view }: { view: GameView }) {
           >
             <div
               className="text-[1.05rem] font-black leading-tight tracking-tight"
-              style={{ color: hero.tone === 'good' ? 'var(--color-good)' : 'var(--color-accent)' }}
+              style={{ color: HERO_INK[hero.tone] }}
             >
               {hero.title}
             </div>

@@ -4,29 +4,53 @@ import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { Confetti } from './Confetti';
 import { ScoreMeter } from './PlayerPanel';
-import { MOVE, SETTLE } from '@/lib/client/motion';
+import { GAUGE_DELAY, GAUGE_FILL, GAUGE_STAGGER, MOVE, SETTLE } from '@/lib/client/motion';
 import type { GameView, RoundScore } from '@/lib/skyjo';
 
-/** Compteur qui monte : un score qui s'incrémente se regarde, un score affiché non. */
-function CountUp({ to, duration = 700 }: { to: number; duration?: number }) {
-  const [value, setValue] = useState(0);
-  const from = useRef(0);
+/**
+ * Compteur qui monte : un score qui s'incrémente se regarde, un score affiché non.
+ *
+ * Il part de `from` — le total d'avant la manche — et non de zéro : c'est le
+ * même trajet que la jauge juste à côté, aux mêmes instants, et les deux
+ * racontent alors la même chose. Un compteur qui repartait de zéro pendant
+ * qu'une barre partait de l'ancien total donnait deux histoires pour un chiffre.
+ */
+function CountUp({
+  to,
+  from = 0,
+  delay = 0,
+  duration = GAUGE_FILL * 1000,
+}: {
+  to: number;
+  from?: number;
+  /** Attente avant de démarrer, en secondes — calée sur celle de la jauge. */
+  delay?: number;
+  duration?: number;
+}) {
+  const [value, setValue] = useState(from);
+  const origin = useRef(from);
 
   useEffect(() => {
-    const start = performance.now();
-    const origin = from.current;
+    const begin = origin.current;
     let frame = 0;
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
-      // easeOutCubic : ça freine à l'arrivée, comme un compteur mécanique.
-      const eased = 1 - (1 - t) ** 3;
-      setValue(Math.round(origin + (to - origin) * eased));
-      if (t < 1) frame = requestAnimationFrame(tick);
-      else from.current = to;
+    const launch = () => {
+      const start = performance.now();
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - start) / duration);
+        // easeOutCubic : ça freine à l'arrivée, comme un compteur mécanique.
+        const eased = 1 - (1 - t) ** 3;
+        setValue(Math.round(begin + (to - begin) * eased));
+        if (t < 1) frame = requestAnimationFrame(tick);
+        else origin.current = to;
+      };
+      frame = requestAnimationFrame(tick);
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [to, duration]);
+    const timer = setTimeout(launch, delay * 1000);
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(frame);
+    };
+  }, [to, duration, delay]);
 
   return <span className="tnum">{value}</span>;
 }
@@ -59,6 +83,11 @@ function ScoreRows({ view, scores }: { view: GameView; scores: RoundScore[] }) {
         const player = view.players.find((p) => p.id === score.playerId);
         if (!player) return null;
         const isMe = player.id === view.you.id;
+        // Le total est déjà à jour quand la feuille s'ouvre : l'avant se
+        // retrouve en retirant ce que la manche vient d'ajouter. C'est de là que
+        // partent la jauge et le compteur, ensemble.
+        const before = player.totalScore - score.final;
+        const lift = GAUGE_DELAY + GAUGE_STAGGER * rank;
 
         return (
           <motion.li
@@ -83,7 +112,13 @@ function ScoreRows({ view, scores }: { view: GameView; scores: RoundScore[] }) {
                   </span>
                 )}
               </div>
-              <ScoreMeter score={player.totalScore} target={view.targetScore} />
+              <ScoreMeter
+                score={player.totalScore}
+                from={before}
+                delay={lift}
+                target={view.targetScore}
+                thick
+              />
             </div>
 
             <div className="text-right">
@@ -106,7 +141,7 @@ function ScoreRows({ view, scores }: { view: GameView; scores: RoundScore[] }) {
                 </span>
               </div>
               <div className="tnum text-[0.7rem] text-ink-dim">
-                total <CountUp to={player.totalScore} />
+                total <CountUp to={player.totalScore} from={before} delay={lift} />
               </div>
             </div>
           </motion.li>

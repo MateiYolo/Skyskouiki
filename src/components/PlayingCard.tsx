@@ -259,11 +259,19 @@ function Card({
  */
 export const PlayingCard = memo(Card);
 
-/** Emplacement vide : une colonne éliminée laisse un trou, pas une carte. */
+/**
+ * Emplacement vide : une colonne éliminée laisse un trou, pas une carte.
+ *
+ * Le trou doit se voir. C'est le seul endroit de la grille qui raconte le passé
+ * de la manche — trois cartes identiques sont parties d'ici — et c'est aussi ce
+ * qui explique une grille adverse à quatre cartes retournées sur huit. Tout le
+ * dessin est dans `.empty-slot` : des hachures, un tireté franc et un creux.
+ */
 export function EmptySlot({ size = 'md' }: { size?: CardSize }) {
   return (
     <div
-      className={`aspect-[3/4] w-full border border-dashed border-white/12 bg-white/[0.03] ${RADIUS[size]}`}
+      className={`empty-slot ${size === 'xs' ? 'empty-slot-xs' : ''} aspect-[3/4] w-full ${RADIUS[size]}`}
+      role="img"
       aria-label="Emplacement vidé"
     />
   );

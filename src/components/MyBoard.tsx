@@ -61,14 +61,13 @@ export const MyBoard = memo(function MyBoard({
         <Avatar player={me} active={myTurn} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[0.8rem] font-semibold leading-tight">{me.name}</div>
+          {/* Une pastille pleine, pas une ligne de texte fin : c'est l'état qui
+              décide de tout le reste du coup, il doit se voir depuis la grille
+              sans qu'on ait à relire l'en-tête. */}
           {flag && (
-            <div
-              className={`text-[0.6rem] font-bold leading-tight ${
-                flag === 'tu as fermé' ? 'text-danger' : 'text-accent'
-              }`}
-            >
+            <span className="mt-0.5 inline-block rounded-full bg-danger/20 px-1.5 py-px text-[0.6rem] font-black uppercase tracking-[0.08em] leading-tight text-danger">
               {flag}
-            </div>
+            </span>
           )}
         </div>
         <ScoreTiles round={me.visibleSum} total={me.totalScore} target={view.targetScore} />

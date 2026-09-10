@@ -91,3 +91,22 @@ export const CLEAR_STAGGER = 0.07;
 export const IMPACT = 0.16;
 
 export const FLIGHT: Transition = { duration: FLIGHT_DURATION, ease: EASE_TRAVEL };
+
+// --- feuille de scores ------------------------------------------------------
+
+/**
+ * Le temps que met une jauge de score à passer de l'ancien total au nouveau.
+ *
+ * Franchement plus long que le reste de l'interface, et pour la même raison
+ * qu'un trajet de carte : ce n'est pas un habillage qui suit, c'est la seule
+ * image de la partie qui montre *combien* la manche a coûté. Une jauge qui
+ * arrive déjà remplie ne dit que l'état ; celle qui monte dit le prix payé, et
+ * on la regarde monter chez les autres aussi.
+ */
+export const GAUGE_FILL = 0.95;
+
+/** Ce que la jauge attend avant de partir : le temps que sa ligne se pose. */
+export const GAUGE_DELAY = 0.3;
+
+/** Décalage d'une ligne de scores à la suivante — elles se lisent de haut en bas. */
+export const GAUGE_STAGGER = 0.09;

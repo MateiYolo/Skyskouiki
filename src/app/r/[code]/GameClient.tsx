@@ -8,7 +8,7 @@ import { EventLayer } from '@/components/EventLayer';
 import { FlightLayer } from '@/components/FlightLayer';
 import { MyBoard } from '@/components/MyBoard';
 import { OpponentSheet, OpponentStrip } from '@/components/OpponentStrip';
-import { TableCenter } from '@/components/TableCenter';
+import { TableCenter, type LastTurn } from '@/components/TableCenter';
 import { GameOverPanel, RoundSummary } from '@/components/Overlays';
 import { useMoveEcho } from '@/lib/client/echo';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
@@ -31,19 +31,35 @@ function prompt(view: GameView): { title: string; hint: string } {
       return me && me.faceUpCount < 2
         ? { title: 'Retourne 2 cartes', hint: 'Le plus gros total commence.' }
         : { title: 'Bien joué', hint: 'On attend les autres…' };
-    case 'playing':
+    // La manche est fermée : la consigne le redit à chaque étape du tour. Un
+    // « à toi » qui ne dit pas que c'est la dernière fois est un demi-mensonge —
+    // on ne joue pas le même coup quand il en reste douze et quand il n'en
+    // reste qu'un.
+    case 'playing': {
+      const closing = view.finalTurnsLeft !== null;
       if (view.currentPlayerId !== view.you.id) {
-        return { title: `${current?.emoji ?? ''} ${current?.name ?? ''} joue`, hint: 'Observe et prépare ton coup.' };
+        return {
+          title: `${current?.emoji ?? ''} ${current?.name ?? ''} joue`,
+          hint: closing ? 'Son dernier coup, puis on compte.' : 'Observe et prépare ton coup.',
+        };
       }
       if (view.turnStep === 'choose') {
-        return { title: 'À toi !', hint: 'Pioche, ou prends la carte de la défausse.' };
+        return closing
+          ? { title: 'Ton dernier tour !', hint: 'Un seul coup pour descendre ton total.' }
+          : { title: 'À toi !', hint: 'Pioche, ou prends la carte de la défausse.' };
       }
       if (view.turnStep === 'holding') {
         return view.heldFrom === 'draw'
-          ? { title: 'Échange-la, ou jette-la', hint: 'Tape une de tes cartes — ou la défausse pour t’en débarrasser.' }
+          ? {
+              title: 'Échange-la, ou jette-la',
+              hint: closing
+                ? 'Dernier coup : ce que tu poses, tu le comptes.'
+                : 'Tape une de tes cartes — ou la défausse pour t’en débarrasser.',
+            }
           : { title: 'Place la carte', hint: 'Tape la carte que tu veux remplacer.' };
       }
       return { title: 'Retourne une carte', hint: 'Tu as jeté la pioche : il faut en découvrir une.' };
+    }
     case 'roundOver':
       return { title: 'Manche terminée', hint: '' };
     case 'gameOver':
@@ -191,6 +207,28 @@ export function GameClient({ code }: { code: string }) {
 
   const move = useMemo(() => (view ? lastMove(view) : null), [view]);
 
+  /**
+   * Le bandeau de fin de manche, tant que le dernier tour dure.
+   *
+   * Il ne dit pas seulement « dernier tour » : il dit ce que ça change *pour
+   * celui qui lit*. Celui qui a fermé joue sa pénalité, les autres jouent leur
+   * dernier coup — ce n'est pas la même consigne, et c'est pour ça que l'annonce
+   * d'une seconde et demie ne pouvait pas la porter à elle seule.
+   */
+  const lastTurn = useMemo<LastTurn | null>(() => {
+    if (!view || view.phase !== 'playing' || view.finalTurnsLeft === null) return null;
+    const closedByMe = view.roundCloserId === view.you.id;
+    if (closedByMe) return { closedByMe, note: 'Le plus petit total, sinon il double.' };
+    const closer = view.players.find((p) => p.id === view.roundCloserId);
+    return {
+      closedByMe,
+      note:
+        view.currentPlayerId === view.you.id
+          ? 'Ton dernier coup, puis on compte.'
+          : `${closer?.name ?? 'Quelqu’un'} a tout retourné.`,
+    };
+  }, [view]);
+
   // Qui tient la carte posée au milieu de la table. Sans nom dessus, elle
   // n'appartient à personne et un tour d'adversaire se lit comme un décor.
   const holderId = view?.heldFrom !== null ? view?.currentPlayerId : null;
@@ -289,6 +327,7 @@ export function GameClient({ code }: { code: string }) {
             title={title}
             hint={hint}
             emphasis={myTurn || view.phase === 'initialFlip'}
+            lastTurn={lastTurn}
             drawPileCount={view.drawPileCount}
             discardTop={view.discardTop}
             heldCard={view.heldCard}
@@ -323,9 +362,16 @@ export function GameClient({ code }: { code: string }) {
       )}
 
       {/* Mon tour : un liseré sur tout le pourtour. Il ne masque rien et ne se
-          rate pas, même le téléphone posé à côté de l'assiette. */}
+          rate pas, même le téléphone posé à côté de l'assiette. Rouge quand
+          c'est le dernier coup de la manche : la couleur prévient avant que la
+          consigne ne soit lue. */}
       {myTurn && view.phase === 'playing' && (
-        <div className="turn-glow pointer-events-none fixed inset-0 z-30" aria-hidden />
+        <div
+          className={`turn-glow pointer-events-none fixed inset-0 z-30 ${
+            view.finalTurnsLeft !== null ? 'is-final' : ''
+          }`}
+          aria-hidden
+        />
       )}
 
       <AnimatePresence>
