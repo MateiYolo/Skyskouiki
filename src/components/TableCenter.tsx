@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { memo } from 'react';
 import { PlayingCard } from './PlayingCard';
 import { DISCARD_PILE, DRAW_PILE, HAND } from '@/lib/client/flights';
-import { FLIGHT_DURATION, MOVE } from '@/lib/client/motion';
+import { FLIGHT_DURATION, MOVE, SETTLE } from '@/lib/client/motion';
 
 /**
  * Le milieu de la table : la consigne, les deux piles, et la carte en main.
@@ -24,10 +24,28 @@ import { FLIGHT_DURATION, MOVE } from '@/lib/client/motion';
  * la case suivante.
  */
 
+/**
+ * L'état « dernier tour », tant qu'il dure.
+ *
+ * Ce n'est pas un événement de plus : c'est la seule information de la manche
+ * qui change ce qu'on a le droit de faire — on ne retourne plus une carte pour
+ * voir, on descend son total ou on le paie. L'annonce qui passait au moment de
+ * la fermeture ne suffisait donc pas : celui qui regardait ailleurs deux
+ * secondes jouait son dernier coup sans savoir que c'était le dernier.
+ */
+export interface LastTurn {
+  /** Qui a fermé, et ce qu'il reste à faire — une ligne, en clair. */
+  note: string;
+  /** C'est moi qui ai fermé : je ne joue plus, je regarde et je compte. */
+  closedByMe: boolean;
+}
+
 export interface TableCenterProps {
   title: string;
   hint: string;
   emphasis: boolean;
+  /** Non nul dès qu'un joueur a fermé la manche. */
+  lastTurn: LastTurn | null;
   drawPileCount: number;
   discardTop: number | null;
   /** Déjà filtrée par le serveur : `null` quand le porteur seul a le droit de la voir. */
@@ -86,6 +104,7 @@ export const TableCenter = memo(function TableCenter({
   title,
   hint,
   emphasis,
+  lastTurn,
   drawPileCount,
   discardTop,
   heldCard,
@@ -119,6 +138,29 @@ export const TableCenter = memo(function TableCenter({
     // Un bandeau bordé sur ses deux faces : le terrain commun se voit, et on
     // sait de part et d'autre à qui appartient chaque moitié de l'écran.
     <div className="shrink-0 border-y border-white/8 bg-white/[0.03] px-4 py-1">
+      {/* Le compte à rebours de la manche, posé au-dessus de la consigne : c'est
+          le seul bandeau de l'écran qui reste tant que son état dure. Il ne
+          clignote pas — un état ne bat pas — mais il est rouge et il est là à
+          chaque coup d'œil, ce qu'une annonce de deux secondes ne peut pas être. */}
+      <AnimatePresence initial={false}>
+        {lastTurn && (
+          <motion.div
+            className="mb-1 flex items-center justify-center gap-2 rounded-lg border border-danger/55 bg-danger/15 px-2.5 py-1"
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginBottom: '0.25rem' }}
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            transition={SETTLE}
+          >
+            <span className="shrink-0 text-[0.62rem] font-black uppercase tracking-[0.16em] text-danger">
+              {lastTurn.closedByMe ? 'tu as fermé' : 'dernier tour'}
+            </span>
+            <span className="truncate text-[0.64rem] font-medium leading-tight text-ink-dim">
+              {lastTurn.note}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Consigne : deux lignes réservées, pour que rien ne saute d'un tour à l'autre. */}
       <div className="mb-1.5 flex h-[2.1rem] flex-col justify-center text-center">
         <motion.div

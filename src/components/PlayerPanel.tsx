@@ -2,26 +2,68 @@
 
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import { FLIGHT_DURATION, MOVE } from '@/lib/client/motion';
+import { EASE_OUT, FLIGHT_DURATION, GAUGE_FILL, MOVE } from '@/lib/client/motion';
 import type { ViewPlayer } from '@/lib/skyjo';
 
-/** Jauge de danger : on ne veut surtout pas la remplir. */
-export function ScoreMeter({ score, target }: { score: number; target: number }) {
+/**
+ * Jauge de danger : on ne veut surtout pas la remplir.
+ *
+ * Sur la table, elle se contente d'afficher où en est un joueur. Sur la feuille
+ * de scores, elle a un autre travail : montrer le *chemin parcouru* pendant la
+ * manche. D'où `from` — la jauge part de l'ancien total, se remplit de gauche à
+ * droite en freinant à l'arrivée, et laisse derrière elle la portion qui vient
+ * d'être perdue, éclairée le temps qu'on la voie. Sans ça, elle apparaissait
+ * déjà pleine : le score changeait, la barre non.
+ */
+export function ScoreMeter({
+  score,
+  target,
+  from,
+  delay = 0,
+  thick = false,
+}: {
+  score: number;
+  target: number;
+  /** Total d'avant la manche : la jauge part de là. Omis, elle se pose à sa valeur. */
+  from?: number;
+  /** Attente avant le remplissage, pour que les lignes montent l'une après l'autre. */
+  delay?: number;
+  /** Un peu plus haute : sur la feuille de scores, c'est elle qu'on regarde. */
+  thick?: boolean;
+}) {
   const ratio = Math.max(0, Math.min(1, score / target));
+  const start = from === undefined ? ratio : Math.max(0, Math.min(1, from / target));
+  const grows = start < ratio;
   const hot = ratio > 0.75;
+  const fill = hot
+    ? 'linear-gradient(90deg, #ffb347, #ff5a5f)'
+    : 'linear-gradient(90deg, #4ade80, #ffcc4d)';
 
   return (
-    <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+    <div className={`relative w-full overflow-hidden rounded-full bg-white/10 ${thick ? 'h-1.5' : 'h-1'}`}>
+      {/* Ce que la manche vient de coûter, en clair derrière la jauge : la barre
+          la recouvre en montant, donc on voit exactement quelle part du chemin
+          est neuve. */}
+      {grows && (
+        <motion.div
+          className="absolute inset-y-0 rounded-full bg-white/45"
+          style={{ left: `${start * 100}%`, width: `${(ratio - start) * 100}%` }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 1, 1, 0] }}
+          transition={{
+            duration: GAUGE_FILL + 0.5,
+            delay,
+            times: [0, 0.12, 0.72, 1],
+            ease: 'linear',
+          }}
+        />
+      )}
       <motion.div
-        className="h-full rounded-full"
-        style={{
-          background: hot
-            ? 'linear-gradient(90deg, #ffb347, #ff5a5f)'
-            : 'linear-gradient(90deg, #4ade80, #ffcc4d)',
-        }}
-        initial={false}
+        className="absolute inset-y-0 left-0 rounded-full"
+        style={{ background: fill }}
+        initial={grows ? { width: `${start * 100}%` } : false}
         animate={{ width: `${ratio * 100}%` }}
-        transition={MOVE}
+        transition={grows ? { duration: GAUGE_FILL, delay, ease: EASE_OUT } : MOVE}
       />
     </div>
   );
