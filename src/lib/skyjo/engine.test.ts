@@ -382,6 +382,28 @@ describe('élimination des lignes (règle maison)', () => {
     expect(s.lastEvents.some((e) => e.type === 'groupCleared')).toBe(false);
   });
 
+  it('élimine la ligne libérée par la colonne qui vient de partir', () => {
+    let s = started(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    // La ligne 0 est trois 4 plus un 0 qui dépareille. Compléter la colonne 3
+    // en 0 la fait partir, et la ligne 0 devient alors un groupe homogène.
+    setGrid(s, id, [4, 4, 4, 0, 1, 2, 3, 0, 5, 6, 7, 9]);
+    s.discardPile.push(0);
+    const discardBefore = s.discardPile.length;
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 11 });
+
+    const grid = s.players.find((p) => p.id === id)!.grid;
+    for (const i of [...columnIndices(3), ...rowIndices(0)]) expect(grid[i]).toBeNull();
+    // -1 (carte prise) +1 (le 9 remplacé) +3 (la colonne) +3 (la ligne raccourcie)
+    expect(s.discardPile.length).toBe(discardBefore + 6);
+    const cleared = s.lastEvents.filter((e) => e.type === 'groupCleared');
+    expect(cleared).toHaveLength(2);
+    expect(cleared[0]).toMatchObject({ kind: 'column', index: 3, value: 0, cells: [3, 7, 11] });
+    expect(cleared[1]).toMatchObject({ kind: 'row', index: 0, value: 4, cells: [0, 1, 2] });
+  });
+
   it('vide d’un seul coup la colonne et la ligne qui se croisent', () => {
     let s = started(2);
     const id = s.players[s.currentPlayerIndex].id;
