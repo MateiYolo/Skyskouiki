@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { PlayingCard } from './PlayingCard';
 import { ARC_EASE, EASE_TRAVEL, FLIGHT_DURATION, IMPACT } from '@/lib/client/motion';
 import { flightsForEvents, onFlights, type FlightRequest } from '@/lib/client/flights';
-import type { GameView } from '@/lib/skyjo';
+import type { GameView, ValueCard } from '@/lib/skyjo';
 
 /**
  * Les cartes qui voyagent.
@@ -214,7 +214,7 @@ export function FlightLayer({ view }: { view: GameView }) {
   const [flights, setFlights] = useState<Flight[]>([]);
   const seen = useRef(-1);
   /** Le dessus de la défausse à la version précédente : de quoi la recouvrir. */
-  const discardTop = useRef<number | null>(null);
+  const discardTop = useRef<ValueCard | null>(null);
 
   /** Mesure les deux bouts maintenant : après, la mise en page aura bougé. */
   const launch = useCallback((requests: FlightRequest[]) => {

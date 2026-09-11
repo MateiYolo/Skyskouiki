@@ -17,10 +17,10 @@ import { MOVE } from '@/lib/client/motion';
 import { armAudio, cue, initAudio, isMuted, setMuted } from '@/lib/client/feedback';
 import { useGame } from '@/lib/client/useGame';
 import { heldSummary, lastMove } from '@/lib/skyjo';
-import type { GameView, LegalAction } from '@/lib/skyjo';
+import type { GameView, LegalAction, Variant } from '@/lib/skyjo';
 
 /** Ce que le joueur doit faire, là, maintenant. */
-function prompt(view: GameView): { title: string; hint: string } {
+function prompt(view: GameView, stealFrom: number | null): { title: string; hint: string } {
   const me = view.players.find((p) => p.id === view.you.id);
   const current = view.players.find((p) => p.id === view.currentPlayerId);
 
@@ -57,6 +57,16 @@ function prompt(view: GameView): { title: string; hint: string } {
                 : 'Tape une de tes cartes — ou la défausse pour t’en débarrasser.',
             }
           : { title: 'Place la carte', hint: 'Tape la carte que tu veux remplacer.' };
+      }
+      // Le Vol se joue en deux gestes : la consigne doit dire lequel des deux
+      // reste à faire, sinon le premier tap semble n'avoir rien déclenché.
+      if (view.turnStep === 'stealing') {
+        return stealFrom === null
+          ? { title: 'Vol !', hint: 'Donne une de tes cartes visibles — ou renonce.' }
+          : {
+              title: 'Contre laquelle ?',
+              hint: 'Ouvre la grille d’un adversaire et tape la carte que tu prends.',
+            };
       }
       return { title: 'Retourne une carte', hint: 'Tu as jeté la pioche : il faut en découvrir une.' };
     }
@@ -107,6 +117,8 @@ export function GameClient({ code }: { code: string }) {
   const [showSettings, setShowSettings] = useState(false);
   const [joining, setJoining] = useState(false);
   const [inspecting, setInspecting] = useState<string | null>(null);
+  // Ma carte désignée pour un Vol, en attente de sa contrepartie.
+  const [pickedCell, setPickedCell] = useState<number | null>(null);
 
   // Préférence de son lue dans le navigateur, donc après le montage.
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -166,6 +178,10 @@ export function GameClient({ code }: { code: string }) {
       if (now.has('flipInitial')) return void run({ type: 'flipInitial', index });
       if (now.has('placeCard')) return void run({ type: 'placeCard', index });
       if (now.has('flipCard')) return void run({ type: 'flipCard', index });
+      // Un Vol ne part pas au premier tap : on retient la carte, et c'est le
+      // second geste — sur la grille d'en face — qui envoie le coup. Retaper la
+      // même carte la relâche.
+      if (now.has('steal')) setPickedCell((current) => (current === index ? null : index));
     },
     [run],
   );
@@ -188,17 +204,24 @@ export function GameClient({ code }: { code: string }) {
       }
       if (legal.has('placeCard')) return true;
       if (legal.has('flipCard')) return !cell.faceUp;
+      // Un Vol n'échange que des cartes visibles, des deux côtés.
+      if (legal.has('steal')) return cell.faceUp;
       return false;
     },
     [legal, me, revealing],
   );
 
+  const onDecline = useCallback(() => void run({ type: 'declineSteal' }), [run]);
   const onDraw = useCallback(() => void run({ type: 'drawFromPile' }), [run]);
   const onTakeDiscard = useCallback(() => void run({ type: 'takeDiscard' }), [run]);
   const onDiscardHeld = useCallback(() => void run({ type: 'discardHeld' }), [run]);
   const onStart = useCallback(() => void run({ type: 'startGame' }), [run]);
   const onNextRound = useCallback(() => void run({ type: 'nextRound' }), [run]);
   const onPlayAgain = useCallback(() => void run({ type: 'playAgain' }), [run]);
+  const onSetVariant = useCallback(
+    (variant: Variant) => void run({ type: 'setVariant', variant }),
+    [run],
+  );
 
   const opponents = useMemo(
     () => view?.players.filter((p) => p.id !== view.you.id) ?? [],
@@ -231,7 +254,8 @@ export function GameClient({ code }: { code: string }) {
 
   // Qui tient la carte posée au milieu de la table. Sans nom dessus, elle
   // n'appartient à personne et un tour d'adversaire se lit comme un décor.
-  const holderId = view?.heldFrom !== null ? view?.currentPlayerId : null;
+  const holderId =
+    view?.heldFrom !== null || view?.turnStep === 'stealing' ? view?.currentPlayerId : null;
   const holder = useMemo(() => {
     const carrier = holderId ? view?.players.find((p) => p.id === holderId) : null;
     return carrier
@@ -256,7 +280,12 @@ export function GameClient({ code }: { code: string }) {
     return <ProfileGate identity={identity} onSave={update} />;
   }
 
-  const { title, hint } = prompt(view);
+  // La carte retenue n'a de sens que tant qu'un Vol est à résoudre : plutôt
+  // qu'un effet qui la remet à zéro après coup, on la lit à travers la règle du
+  // moment — le tour suivant repart forcément sans sélection.
+  const stealFrom = legal.has('steal') ? pickedCell : null;
+
+  const { title, hint } = prompt(view, stealFrom);
   const myTurn = view.currentPlayerId === view.you.id;
   const held = heldSummary(view);
   // Résolu au rendu : un joueur qui quitte referme sa fiche de lui-même.
@@ -280,6 +309,9 @@ export function GameClient({ code }: { code: string }) {
             vit dans le salon, puis dans le menu ⚙ pour le retardataire. */}
         <div className="text-[0.65rem] uppercase tracking-[0.18em] text-ink-faint">
           {view.phase === 'lobby' ? 'salon' : `manche ${view.round}`} · objectif {view.targetScore}
+          {/* Le mode change le paquet : il doit rester lisible toute la partie,
+              pas seulement au moment où on le choisit. */}
+          {view.variant === 'spicy' && <span className="ml-1.5 text-steal">· spicy</span>}
         </div>
         <button
           type="button"
@@ -310,7 +342,13 @@ export function GameClient({ code }: { code: string }) {
       )}
 
       {view.phase === 'lobby' ? (
-        <Lobby view={view} onStart={onStart} busy={busy} />
+        <Lobby
+          view={view}
+          onStart={onStart}
+          onSetVariant={onSetVariant}
+          canSetVariant={legal.has('setVariant')}
+          busy={busy}
+        />
       ) : (
         <>
           <OpponentStrip
@@ -318,6 +356,7 @@ export function GameClient({ code }: { code: string }) {
             opponents={opponents}
             move={move}
             echo={echo}
+            picking={stealFrom !== null}
             onOpen={setInspecting}
           />
 
@@ -332,6 +371,7 @@ export function GameClient({ code }: { code: string }) {
             discardTop={view.discardTop}
             heldCard={view.heldCard}
             heldFrom={view.heldFrom}
+            stealing={view.turnStep === 'stealing'}
             heldNote={held?.text ?? null}
             holder={holder}
             drewFrom={echo?.drewFrom ?? null}
@@ -339,9 +379,11 @@ export function GameClient({ code }: { code: string }) {
             canDraw={legal.has('drawFromPile')}
             canTakeDiscard={legal.has('takeDiscard')}
             canDiscardHeld={legal.has('discardHeld')}
+            canDecline={legal.has('declineSteal')}
             onDraw={onDraw}
             onTakeDiscard={onTakeDiscard}
             onDiscardHeld={onDiscardHeld}
+            onDecline={onDecline}
           />
 
           {me && (
@@ -352,6 +394,7 @@ export function GameClient({ code }: { code: string }) {
               isTarget={isTarget}
               markTargets={markTargets}
               onCell={onCell}
+              selected={stealFrom}
               touched={echo?.touched[view.you.id] ?? null}
               cleared={echo?.cleared[view.you.id] ?? null}
               echoKey={echo?.version ?? 0}
@@ -381,6 +424,20 @@ export function GameClient({ code }: { code: string }) {
             active={inspected.id === view.currentPlayerId}
             closer={inspected.id === view.roundCloserId}
             target={view.targetScore}
+            onPick={
+              stealFrom === null
+                ? undefined
+                : (targetIndex) => {
+                    setInspecting(null);
+                    setPickedCell(null);
+                    void run({
+                      type: 'steal',
+                      index: stealFrom,
+                      targetPlayerId: inspected.id,
+                      targetIndex,
+                    });
+                  }
+            }
             onClose={() => setInspecting(null)}
           />
         )}
@@ -504,7 +561,20 @@ function ProfileGate({
   );
 }
 
-function Lobby({ view, onStart, busy }: { view: GameView; onStart: () => void; busy: boolean }) {
+function Lobby({
+  view,
+  onStart,
+  onSetVariant,
+  canSetVariant,
+  busy,
+}: {
+  view: GameView;
+  onStart: () => void;
+  onSetVariant: (variant: Variant) => void;
+  /** Seul l'hôte choisit : les autres lisent le mode sans pouvoir en changer. */
+  canSetVariant: boolean;
+  busy: boolean;
+}) {
   const [copied, setCopied] = useState(false);
 
   const share = async () => {
@@ -548,6 +618,12 @@ function Lobby({ view, onStart, busy }: { view: GameView; onStart: () => void; b
         ))}
       </ul>
 
+      <VariantPicker
+        variant={view.variant}
+        canChange={canSetVariant}
+        onChange={onSetVariant}
+      />
+
       {view.you.isHost ? (
         view.players.length < 2 ? (
           // Un bouton jaune grisé vire au brun : mieux vaut un état d'attente assumé.
@@ -571,6 +647,74 @@ function Lobby({ view, onStart, busy }: { view: GameView; onStart: () => void; b
       <Link href="/regles" className="text-xs text-ink-faint underline underline-offset-4">
         Revoir les règles
       </Link>
+    </div>
+  );
+}
+
+/**
+ * Le choix du mode, dans le salon.
+ *
+ * C'est le premier réglage de partie de l'application, et il ne vit que là :
+ * le mode décide de la composition du paquet, donc il se fige à la
+ * distribution. Les invités le lisent sans pouvoir le changer — mais ils le
+ * lisent, parce qu'arriver dans une partie et découvrir un joker en cours de
+ * manche n'est pas une surprise agréable.
+ */
+function VariantPicker({
+  variant,
+  canChange,
+  onChange,
+}: {
+  variant: Variant;
+  canChange: boolean;
+  onChange: (variant: Variant) => void;
+}) {
+  const spicy = variant === 'spicy';
+  const note = spicy
+    ? 'Deux -5, quatre cartes Vol et un joker glissés dans le paquet.'
+    : 'Le paquet officiel, rien de plus.';
+
+  return (
+    <div className="w-full max-w-xs">
+      <p className="mb-1.5 text-center text-[0.6rem] uppercase tracking-[0.2em] text-ink-faint">
+        mode
+      </p>
+
+      {canChange ? (
+        <div className="flex gap-1 rounded-2xl border border-white/12 bg-white/5 p-1">
+          {(['classic', 'spicy'] as const).map((option) => {
+            const on = option === variant;
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onChange(option)}
+                aria-pressed={on}
+                className={[
+                  'flex-1 rounded-xl px-3 py-2 text-sm font-bold transition active:scale-[0.98]',
+                  on
+                    ? option === 'spicy'
+                      ? 'bg-steal/25 text-steal ring-1 ring-steal/60'
+                      : 'bg-white/12 text-ink ring-1 ring-white/25'
+                    : 'text-ink-dim',
+                ].join(' ')}
+              >
+                {option === 'spicy' ? 'Spicy' : 'Classique'}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p
+          className={`rounded-2xl border px-4 py-2.5 text-center text-sm font-bold ${
+            spicy ? 'border-steal/50 bg-steal/12 text-steal' : 'border-white/12 bg-white/5 text-ink'
+          }`}
+        >
+          {spicy ? 'Spicy' : 'Classique'}
+        </p>
+      )}
+
+      <p className="mt-1.5 text-center text-[0.68rem] leading-snug text-ink-dim">{note}</p>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { cardName } from './rules';
 import type { GameEvent } from './types';
 import type { GameView } from './view';
 
@@ -21,11 +22,17 @@ function describe(event: GameEvent): string | null {
     case 'drew':
       return event.from === 'discard' ? 'prend la défausse' : 'pioche';
     case 'placed':
-      return `pose ${event.placed}, jette ${event.discarded}`;
+      return `pose ${cardName(event.placed)}, jette ${cardName(event.discarded)}`;
     case 'discarded':
-      return `jette ${event.value}`;
+      return `jette ${cardName(event.value)}`;
     case 'flipped':
-      return `retourne ${event.value}`;
+      return `retourne ${cardName(event.value)}`;
+    case 'stealDrawn':
+      return 'pioche un Vol';
+    case 'stole':
+      return `vole ${cardName(event.taken)}, laisse ${cardName(event.given)}`;
+    case 'stealDeclined':
+      return 'renonce au Vol';
     default:
       return null;
   }
@@ -57,14 +64,21 @@ export function lastMove(view: GameView): LastMove | null {
  * qui reste à deviner, c'est ce qu'il va en faire.
  */
 export function heldSummary(view: GameView): { text: string; revealed: boolean } | null {
-  if (view.heldFrom === null || view.currentPlayerId === null) return null;
-  if (view.currentPlayerId === view.you.id) return null;
-
+  if (view.currentPlayerId === null || view.currentPlayerId === view.you.id) return null;
   const name = view.players.find((p) => p.id === view.currentPlayerId)?.name ?? 'Quelqu’un';
+
+  // Un Vol ne se tient pas en main au sens du moteur, mais pour celui qui
+  // regarde c'est exactement la même chose : quelqu'un a pioché quelque chose,
+  // et tout le tour dépend de ce qu'il va en faire.
+  if (view.turnStep === 'stealing') {
+    return { text: `${name} a pioché un Vol et choisit son échange`, revealed: true };
+  }
+  if (view.heldFrom === null) return null;
+
   const card = view.heldCard;
   const where = view.heldFrom === 'discard' ? 'a pris la défausse' : 'a pioché';
   return {
-    text: card === null ? `${name} ${where}` : `${name} ${where} : ${card}`,
+    text: card === null ? `${name} ${where}` : `${name} ${where} : ${cardName(card)}`,
     revealed: card !== null,
   };
 }

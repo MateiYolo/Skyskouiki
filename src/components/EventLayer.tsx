@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { cue } from '@/lib/client/feedback';
 import { clearDelay } from '@/lib/client/flights';
-import { FLIGHT_DURATION, MOVE, SETTLE } from '@/lib/client/motion';
+import { FLIGHT_DURATION, FLIGHT_NEXT, MOVE, SETTLE } from '@/lib/client/motion';
+import { cardName } from '@/lib/skyjo';
 import type { GameEvent, GameView } from '@/lib/skyjo';
 
 /**
@@ -77,23 +78,84 @@ export function EventLayer({ view }: { view: GameView }) {
           cue('clear', clearDelay(view));
           const group = event.kind === 'row' ? 'Ligne' : 'Colonne';
           // Le compte vient des cases réellement retirées : une ligne amputée
-          // d'une colonne déjà éliminée n'en aligne que trois.
-          const count = event.cells.length === 4 ? 'Quatre' : 'Trois';
+          // d'une colonne déjà éliminée n'en aligne que trois. Et quand c'est le
+          // joker qui a fermé le groupe, le dire : « trois 7 » sur une colonne
+          // qui n'en contenait que deux ferait douter de la règle, pas du coup.
+          const jokers = (event.jokers ?? []).length;
+          const spelled = ['', 'Une', 'Deux', 'Trois', 'Quatre'];
+          const what = jokers
+            ? `${spelled[event.cells.length - jokers]} ${event.value} et le joker`
+            : `${spelled[event.cells.length]} ${event.value}`;
+          const where = mine(event.playerId) ? 'chez toi' : `chez ${nameOf(event.playerId)}`;
+          freshHero = {
+            id: nextId++,
+            title: `${group} éliminée`,
+            subtitle: `${what} ${where}`,
+            tone: mine(event.playerId) ? 'good' : 'warn',
+          };
+          break;
+        }
+
+        // Le Vol se joue en deux temps, et les deux méritent une annonce : la
+        // pioche du Vol, parce que tout le monde doit comprendre pourquoi le
+        // tour s'arrête là, puis l'échange lui-même, parce que deux grilles
+        // changent d'un coup et que la victime n'a rien touché.
+        case 'stealDrawn':
+          cue('steal');
           freshHero = mine(event.playerId)
             ? {
                 id: nextId++,
-                title: `${group} éliminée`,
-                subtitle: `${count} ${event.value} chez toi`,
+                title: 'Vol !',
+                subtitle: 'Une de tes cartes visibles contre une des leurs',
                 tone: 'good',
+                hold: 2800,
               }
             : {
                 id: nextId++,
-                title: `${group} éliminée`,
-                subtitle: `${count} ${event.value} chez ${nameOf(event.playerId)}`,
-                tone: 'warn',
+                title: 'Vol !',
+                subtitle: `${nameOf(event.playerId)} choisit son échange`,
+                tone: 'alert',
+                hold: 2800,
               };
           break;
+        case 'stole': {
+          // Les deux cartes se croisent d'abord, puis se posent : c'est là que
+          // l'échange s'entend.
+          cue('steal', FLIGHT_NEXT + FLIGHT_DURATION);
+          const taken = cardName(event.taken);
+          const given = cardName(event.given);
+          if (mine(event.playerId)) {
+            freshHero = {
+              id: nextId++,
+              title: 'Vol réussi',
+              subtitle: `Tu prends ${taken} à ${nameOf(event.targetPlayerId)}`,
+              tone: 'good',
+            };
+          } else if (mine(event.targetPlayerId)) {
+            freshHero = {
+              id: nextId++,
+              title: 'On t’a volé !',
+              subtitle: `${nameOf(event.playerId)} prend ${taken} et te laisse ${given}`,
+              tone: 'alert',
+              hold: 3000,
+            };
+          } else {
+            freshHero = {
+              id: nextId++,
+              title: 'Vol',
+              subtitle: `${nameOf(event.playerId)} prend ${taken} à ${nameOf(event.targetPlayerId)}`,
+              tone: 'warn',
+            };
+          }
+          break;
         }
+        case 'stealDeclined':
+          fresh.push({
+            id: nextId++,
+            text: mine(event.playerId) ? 'Vol laissé de côté' : `${nameOf(event.playerId)} renonce au Vol`,
+            tone: 'neutral',
+          });
+          break;
         // L'annonce la plus importante de la manche, et la seule qu'on ne peut
         // pas rattraper : après elle, il ne reste qu'un coup à jouer. Elle reste
         // donc nettement plus longtemps que les autres, en rouge — et le bandeau

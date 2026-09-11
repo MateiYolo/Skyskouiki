@@ -4,17 +4,23 @@ import {
   MAX_PLAYERS,
   MIN_PLAYERS,
   buildDeck,
+  cardToCell,
+  cellToCard,
   clearGroups,
+  setCellCard,
   countFaceDown,
   countFaceUp,
   emptyGrid,
   gridSum,
   isFullyRevealed,
   nextRandom,
+  seedStealCards,
   shuffle,
+  STEAL_COUNT,
 } from './rules';
 import {
   GRID_SIZE,
+  isStealCard,
   type Action,
   type ActionResult,
   type Cell,
@@ -22,6 +28,7 @@ import {
   type GameState,
   type Player,
   type RoundScore,
+  type Variant,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -33,6 +40,7 @@ export interface CreateGameOptions {
   code: string;
   host: { id: string; name: string; emoji: string };
   seed?: number;
+  variant?: Variant;
   targetScore?: number;
   now?: number;
 }
@@ -46,6 +54,7 @@ export function createGame(opts: CreateGameOptions): GameState {
     phase: 'lobby',
     players: [makePlayer(opts.host)],
     hostId: opts.host.id,
+    variant: opts.variant ?? 'classic',
     drawPile: [],
     discardPile: [],
     currentPlayerIndex: 0,
@@ -138,6 +147,15 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       return commit();
     }
 
+    case 'setVariant': {
+      // Le mode ne change que la distribution : il se choisit donc librement
+      // tant que rien n'est distribué, et plus du tout après.
+      if (s.phase !== 'lobby') return fail('La partie a déjà commencé.');
+      if (action.playerId !== s.hostId) return fail("Seul l'hôte choisit le mode.");
+      s.variant = action.variant;
+      return commit();
+    }
+
     case 'startGame': {
       if (s.phase !== 'lobby') return fail('La partie a déjà commencé.');
       if (action.playerId !== s.hostId) return fail("Seul l'hôte peut lancer la partie.");
@@ -157,7 +175,12 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       if (!cell) return fail('Case invalide.');
       if (cell.faceUp) return fail('Cette carte est déjà retournée.');
       cell.faceUp = true;
-      events.push({ type: 'initialFlip', playerId: player.id, index: action.index, value: cell.value });
+      events.push({
+        type: 'initialFlip',
+        playerId: player.id,
+        index: action.index,
+        value: cellToCard(cell),
+      });
       maybeStartPlay(s, events);
       return commit();
     }
@@ -168,7 +191,16 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       if (err) return fail(err);
       if (!replenishDrawPile(s, events))
         return fail('La pioche est vide : prends la carte de la défausse.');
-      s.heldCard = s.drawPile.pop()!;
+      const card = s.drawPile.pop()!;
+      // Mode spicy : un Vol ne se tient pas en main et ne part pas à la
+      // défausse — il n'a pas de valeur à y montrer. Il se résout sur-le-champ,
+      // puis quitte la manche pour de bon.
+      if (isStealCard(card)) {
+        s.turnStep = 'stealing';
+        events.push({ type: 'stealDrawn', playerId: action.playerId });
+        return commit();
+      }
+      s.heldCard = card;
       s.heldFrom = 'draw';
       s.turnStep = 'holding';
       events.push({ type: 'drew', playerId: action.playerId, from: 'draw' });
@@ -192,11 +224,12 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       const player = s.players[s.currentPlayerIndex];
       const cell = cellAt(player.grid, action.index);
       if (!cell) return fail('Case invalide.');
-      const replaced = cell.value;
+      const replaced = cellToCard(cell);
       const placed = s.heldCard!;
       s.discardPile.push(replaced);
-      cell.value = placed;
-      cell.faceUp = true;
+      // La case prend l'identité de la carte posée, joker compris : sans ça, un
+      // joker posé deviendrait un 0 ordinaire et perdrait son pouvoir en route.
+      setCellCard(cell, placed);
       events.push({
         type: 'placed',
         playerId: player.id,
@@ -234,8 +267,70 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       if (!cell) return fail('Case invalide.');
       if (cell.faceUp) return fail('Choisis une carte face cachée.');
       cell.faceUp = true;
-      events.push({ type: 'flipped', playerId: player.id, index: action.index, value: cell.value });
+      events.push({ type: 'flipped', playerId: player.id, index: action.index, value: cellToCard(cell) });
       resolveGroups(s, player, events);
+      endTurn(s, events);
+      return commit();
+    }
+
+    // -- Vol (mode spicy) ----------------------------------------------------
+    case 'steal': {
+      const err = requireTurn(s, action.playerId, 'stealing');
+      if (err) return fail(err);
+      const thief = s.players[s.currentPlayerIndex];
+      if (action.targetPlayerId === thief.id) return fail('Vole la carte d’un adversaire.');
+      const victim = s.players.find((p) => p.id === action.targetPlayerId);
+      if (!victim) return fail('Joueur inconnu.');
+      const mine = cellAt(thief.grid, action.index);
+      const theirs = cellAt(victim.grid, action.targetIndex);
+      if (!mine || !theirs) return fail('Case invalide.');
+      // Face visible des deux côtés : l'échange est entièrement connu de tout
+      // le monde avant d'être joué. Un vol à l'aveugle serait une loterie, et
+      // surtout la victime ne pourrait rien en lire.
+      if (!mine.faceUp || !theirs.faceUp)
+        return fail('L’échange ne porte que sur des cartes face visible.');
+
+      // Les deux cases échangent leur carte entière, drapeau de joker compris :
+      // le joker se vole comme n'importe quelle autre, et c'est même le vol le
+      // plus rentable de la manche.
+      const given = cellToCard(mine);
+      const taken = cellToCard(theirs);
+      setCellCard(mine, taken);
+      setCellCard(theirs, given);
+      events.push({
+        type: 'stole',
+        playerId: thief.id,
+        index: action.index,
+        taken,
+        targetPlayerId: victim.id,
+        targetIndex: action.targetIndex,
+        given,
+      });
+      // Les deux grilles rejouent leurs éliminations : le voleur peut prendre
+      // la carte qui ferme sa colonne, et laisser à sa victime celle qui ferme
+      // la sienne. Un échange reste pourtant neutre sur le nombre de cartes
+      // face cachée de chacun — il ne peut donc jamais faire fermer la manche
+      // par quelqu'un d'autre que celui qui joue.
+      resolveGroups(s, thief, events);
+      resolveGroups(s, victim, events);
+      endTurn(s, events);
+      return commit();
+    }
+
+    case 'declineSteal': {
+      const err = requireTurn(s, action.playerId, 'stealing');
+      if (err) return fail(err);
+      const player = s.players[s.currentPlayerIndex];
+      events.push({ type: 'stealDeclined', playerId: player.id });
+      // Renoncer coûte un retournement, exactement comme jeter une carte
+      // piochée. Sans ce prix, refuser serait toujours le bon coup quand
+      // l'échange ne rapporte rien — et la carte perdrait tout son tranchant.
+      // Reste le cas du joueur qui n'a plus rien à retourner : il n'y a alors
+      // rien à payer, et son tour s'arrête là.
+      if (countFaceDown(player.grid) > 0) {
+        s.turnStep = 'mustFlip';
+        return commit();
+      }
       endTurn(s, events);
       return commit();
     }
@@ -279,6 +374,7 @@ function requireTurn(s: GameState, playerId: string, step: GameState['turnStep']
   if (s.turnStep !== step) {
     if (s.turnStep === 'mustFlip') return 'Tu dois retourner une carte face cachée.';
     if (s.turnStep === 'holding') return 'Tu as déjà une carte en main.';
+    if (s.turnStep === 'stealing') return 'Tu tiens un Vol : désigne l’échange, ou renonce.';
     return 'Action impossible maintenant.';
   }
   return null;
@@ -286,13 +382,23 @@ function requireTurn(s: GameState, playerId: string, step: GameState['turnStep']
 
 /** Distribue une nouvelle manche : 12 cartes face cachée par joueur, 1 carte en défausse. */
 function dealRound(s: GameState, events: GameEvent[]) {
-  const { items: deck, seed } = shuffle(buildDeck(), s.seed);
+  // Les parties créées avant le mode spicy n'ont pas de variante en base.
+  const variant = s.variant ?? 'classic';
+  const { items: deck, seed } = shuffle(buildDeck(variant), s.seed);
   s.seed = seed;
   for (const p of s.players) {
-    p.grid = Array.from({ length: GRID_SIZE }, () => ({ value: deck.pop()!, faceUp: false }));
+    p.grid = Array.from({ length: GRID_SIZE }, () => cardToCell(deck.pop()!));
   }
   s.discardPile = [deck.pop()!];
-  s.drawPile = deck;
+  // Les Vol n'entrent en jeu qu'ici, les grilles déjà servies : c'est ce qui
+  // garantit qu'ils ne peuvent être que dans la pioche.
+  if (variant === 'spicy') {
+    const seeded = seedStealCards(deck, STEAL_COUNT, s.seed);
+    s.drawPile = seeded.pile;
+    s.seed = seeded.seed;
+  } else {
+    s.drawPile = deck;
+  }
   s.turnStep = 'choose';
   s.heldCard = null;
   s.heldFrom = null;

@@ -1,8 +1,24 @@
 import { countFaceDown, countFaceUp } from './rules';
-import type { Cell, GameEvent, GameState, Phase, RoundScore, TurnStep } from './types';
+import type {
+  Cell,
+  GameEvent,
+  GameState,
+  Phase,
+  Player,
+  RoundScore,
+  TurnStep,
+  ValueCard,
+  Variant,
+} from './types';
 
-/** Une case telle qu'un client a le droit de la voir : la valeur cachée n'y figure pas. */
-export type ViewCell = null | { faceUp: true; value: number } | { faceUp: false };
+/**
+ * Une case telle qu'un client a le droit de la voir : la valeur cachée n'y
+ * figure pas. Le joker s'y annonce comme dans l'état — un 0 et un drapeau.
+ */
+export type ViewCell =
+  | null
+  | { faceUp: true; value: number; joker?: true }
+  | { faceUp: false };
 
 export interface ViewPlayer {
   id: string;
@@ -25,7 +41,10 @@ export type LegalAction =
   | 'placeCard'
   | 'discardHeld'
   | 'flipCard'
+  | 'steal'
+  | 'declineSteal'
   | 'startGame'
+  | 'setVariant'
   | 'nextRound'
   | 'playAgain';
 
@@ -35,13 +54,14 @@ export interface GameView {
   version: number;
   phase: Phase;
   round: number;
+  variant: Variant;
   targetScore: number;
   hostId: string;
   players: ViewPlayer[];
   currentPlayerId: string | null;
   turnStep: TurnStep;
   drawPileCount: number;
-  discardTop: number | null;
+  discardTop: ValueCard | null;
   discardCount: number;
   /**
    * Carte en main, visible de tous — y compris quand elle sort de la pioche.
@@ -53,7 +73,7 @@ export interface GameView {
    * ne donne d'ailleurs aucun avantage : la décision appartient à celui qui la
    * tient, l'autre ne fait que comprendre le coup pendant qu'il se joue.
    */
-  heldCard: number | null;
+  heldCard: ValueCard | null;
   heldFrom: 'draw' | 'discard' | null;
   roundCloserId: string | null;
   finalTurnsLeft: number | null;
@@ -66,7 +86,8 @@ export interface GameView {
 
 function viewCell(cell: Cell): ViewCell {
   if (cell === null) return null;
-  return cell.faceUp ? { faceUp: true, value: cell.value } : { faceUp: false };
+  if (!cell.faceUp) return { faceUp: false };
+  return cell.joker ? { faceUp: true, value: cell.value, joker: true } : { faceUp: true, value: cell.value };
 }
 
 function visibleSum(grid: readonly Cell[]): number {
@@ -108,6 +129,7 @@ export function toView(state: GameState, viewerId: string, since?: number): Game
     version: state.version,
     phase: state.phase,
     round: state.round,
+    variant: state.variant ?? 'classic',
     targetScore: state.targetScore,
     hostId: state.hostId,
     players: state.players.map((p) => ({
@@ -143,6 +165,19 @@ export function toView(state: GameState, viewerId: string, since?: number): Game
   };
 }
 
+/**
+ * Vrai si un échange est jouable : une carte visible chez moi, une chez un
+ * adversaire.
+ *
+ * Le cas contraire n'est pas qu'une précaution : deux cartes retournées en
+ * début de manche peuvent toutes les deux partir avec une colonne éliminée, et
+ * on se retrouve alors avec un Vol en main et personne à voler.
+ */
+function canSteal(state: GameState, me: Player): boolean {
+  if (countFaceUp(me.grid) === 0) return false;
+  return state.players.some((p) => p.id !== me.id && countFaceUp(p.grid) > 0);
+}
+
 export function legalActionsFor(state: GameState, viewerId: string): LegalAction[] {
   const me = state.players.find((p) => p.id === viewerId);
   if (!me) return [];
@@ -150,8 +185,11 @@ export function legalActionsFor(state: GameState, viewerId: string): LegalAction
   const isCurrent = !!current && current.id === viewerId;
 
   switch (state.phase) {
-    case 'lobby':
-      return state.hostId === viewerId && state.players.length >= 2 ? ['startGame'] : [];
+    case 'lobby': {
+      if (state.hostId !== viewerId) return [];
+      // Le mode se change tant que rien n'est distribué, même seul dans le salon.
+      return state.players.length >= 2 ? ['setVariant', 'startGame'] : ['setVariant'];
+    }
     case 'initialFlip':
       return countFaceUp(me.grid) < 2 ? ['flipInitial'] : [];
     case 'playing':
@@ -164,6 +202,11 @@ export function legalActionsFor(state: GameState, viewerId: string): LegalAction
         return state.heldFrom === 'draw' && countFaceDown(me.grid) > 0
           ? ['placeCard', 'discardHeld']
           : ['placeCard'];
+      }
+      // Renoncer reste toujours possible : c'est ce qui garantit qu'un Vol ne
+      // peut pas bloquer un tour, même sans cible.
+      if (state.turnStep === 'stealing') {
+        return canSteal(state, me) ? ['steal', 'declineSteal'] : ['declineSteal'];
       }
       return ['flipCard'];
     case 'roundOver':

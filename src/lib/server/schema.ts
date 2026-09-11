@@ -26,6 +26,7 @@ export const identitySchema = z.object({
 export const actionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('join'), name: clean(16), emoji: clean(8) }),
   z.object({ type: z.literal('leave') }),
+  z.object({ type: z.literal('setVariant'), variant: z.enum(['classic', 'spicy']) }),
   z.object({ type: z.literal('startGame') }),
   z.object({ type: z.literal('flipInitial'), index: gridIndex }),
   z.object({ type: z.literal('drawFromPile') }),
@@ -33,6 +34,15 @@ export const actionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('placeCard'), index: gridIndex }),
   z.object({ type: z.literal('discardHeld') }),
   z.object({ type: z.literal('flipCard'), index: gridIndex }),
+  z.object({
+    type: z.literal('steal'),
+    index: gridIndex,
+    // La cible est bornée comme un identifiant de joueur, jamais lue comme un
+    // index : le moteur la cherche dans la partie et refuse ce qu'il ne trouve pas.
+    targetPlayerId: z.string().min(8).max(64),
+    targetIndex: gridIndex,
+  }),
+  z.object({ type: z.literal('declineSteal') }),
   z.object({ type: z.literal('nextRound') }),
   z.object({ type: z.literal('playAgain') }),
 ]);

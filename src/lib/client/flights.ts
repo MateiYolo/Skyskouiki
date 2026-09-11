@@ -1,6 +1,6 @@
 'use client';
 
-import type { GameView } from '@/lib/skyjo';
+import { JOKER_CARD, type GameView, type PileCard, type ValueCard } from '@/lib/skyjo';
 import {
   CLEAR_HOLD,
   CLEAR_STAGGER,
@@ -41,8 +41,11 @@ export const cellAnchor = (playerId: string, index: number) => `cell-${playerId}
 export interface FlightRequest {
   from: string;
   to: string;
-  /** `null` = carte face cachée : on sait qu'elle bouge, pas ce qu'elle vaut. */
-  value: number | null;
+  /**
+   * `null` = carte face cachée : on sait qu'elle bouge, pas ce qu'elle vaut.
+   * Un Vol peut voler lui aussi, de la pioche jusqu'à la main.
+   */
+  value: PileCard | null;
   delay: number;
   /**
    * Durée pendant laquelle la carte reste posée sur `from` au lieu de voler.
@@ -83,7 +86,7 @@ export function onFlights(listener: Listener) {
  * Le cache passe *sous* la carte en vol : une carte se pose sur une pile, elle
  * ne se glisse pas dessous. C'est pourquoi il s'émet toujours en premier.
  */
-function coverDiscard(value: number | null, from: number, until: number): FlightRequest[] {
+function coverDiscard(value: ValueCard | null, from: number, until: number): FlightRequest[] {
   if (value === null || until <= from) return [];
   return [{ from: DISCARD_PILE, to: DISCARD_PILE, value, delay: from, hold: until - from }];
 }
@@ -100,11 +103,34 @@ function coverDiscard(value: number | null, from: number, until: number): Flight
  * L'ordre du tableau est l'ordre d'empilement : la carte qui arrive passe
  * *sous* celle qui s'en va, comme sur une table.
  */
-function swap(cell: string, arriving: number, leaving: number | null): FlightRequest[] {
+function swap(cell: string, arriving: ValueCard, leaving: ValueCard | null): FlightRequest[] {
   return [
     { from: HAND, to: cell, value: arriving, delay: 0 },
     { from: cell, to: cell, value: leaving, delay: 0, hold: FLIGHT_NEXT },
     { from: cell, to: DISCARD_PILE, value: leaving, delay: FLIGHT_NEXT },
+  ];
+}
+
+/**
+ * Un vol : deux cartes qui se croisent entre deux grilles.
+ *
+ * Même principe que `swap`, en double. Chaque case garde un instant la carte
+ * qui la quitte — la grille affiche déjà celle qui arrive — puis les deux
+ * partent en même temps, chacune vers la case de l'autre. C'est le seul
+ * mouvement du jeu qui traverse le terrain dans les deux sens à la fois, et
+ * c'est exactement ce qu'un vol est.
+ */
+function cross(
+  thiefCell: string,
+  victimCell: string,
+  given: ValueCard,
+  taken: ValueCard,
+): FlightRequest[] {
+  return [
+    { from: thiefCell, to: thiefCell, value: given, delay: 0, hold: FLIGHT_NEXT },
+    { from: victimCell, to: victimCell, value: taken, delay: 0, hold: FLIGHT_NEXT },
+    { from: thiefCell, to: victimCell, value: given, delay: FLIGHT_NEXT },
+    { from: victimCell, to: thiefCell, value: taken, delay: FLIGHT_NEXT },
   ];
 }
 
@@ -172,6 +198,9 @@ function settledAt(view: GameView): number {
         at(FLIGHT_DURATION);
         break;
       case 'placed':
+      // Un vol peut fermer une colonne — des deux côtés. Les cartes du groupe
+      // ne partent donc qu'une fois le croisement posé.
+      case 'stole':
         at(FLIGHT_NEXT + FLIGHT_DURATION);
         break;
       case 'flipped':
@@ -225,8 +254,11 @@ export function revealHold(view: GameView): number {
  *
  * Rendu dans l'ordre chronologique, cache compris.
  */
-function discardLandings(view: GameView, clearedAt: number): Array<{ value: number; at: number; mine: boolean }> {
-  const landings: Array<{ value: number; at: number; mine: boolean }> = [];
+function discardLandings(
+  view: GameView,
+  clearedAt: number,
+): Array<{ value: ValueCard; at: number; mine: boolean }> {
+  const landings: Array<{ value: ValueCard; at: number; mine: boolean }> = [];
   for (const event of view.lastEvents) {
     switch (event.type) {
       case 'drew':
@@ -245,9 +277,9 @@ function discardLandings(view: GameView, clearedAt: number): Array<{ value: numb
         });
         break;
       case 'groupCleared':
-        event.cells.forEach((_, rank) => {
+        event.cells.forEach((index, rank) => {
           landings.push({
-            value: event.value,
+            value: (event.jokers ?? []).includes(index) ? JOKER_CARD : event.value,
             at: clearedAt + rank * CLEAR_STAGGER + FLIGHT_DURATION,
             mine: event.playerId === view.you.id,
           });
@@ -269,7 +301,7 @@ function discardLandings(view: GameView, clearedAt: number): Array<{ value: numb
  */
 export function flightsForEvents(
   view: GameView,
-  previousDiscardTop: number | null = null,
+  previousDiscardTop: ValueCard | null = null,
 ): FlightRequest[] {
   const out: FlightRequest[] = [];
   const cleared = clearDelay(view);
@@ -313,6 +345,20 @@ export function flightsForEvents(
         if (event.playerId === view.you.id) break;
         out.push({ from: HAND, to: DISCARD_PILE, value: event.value, delay: 0 });
         break;
+      // Le vol se rejoue pour tout le monde, voleur compris : contrairement aux
+      // autres coups, il n'a pas décollé au doigt — rien n'en était connu avant
+      // la réponse du serveur, et la grille d'en face change en même temps que
+      // la mienne.
+      case 'stole':
+        out.push(
+          ...cross(
+            cellAnchor(event.playerId, event.index),
+            cellAnchor(event.targetPlayerId, event.targetIndex),
+            event.given,
+            event.taken,
+          ),
+        );
+        break;
       // Une élimination, elle, se rejoue pour tout le monde — la mienne
       // comprise : personne ne l'a vue venir, elle n'existe que dans l'état
       // d'après. Les cartes restent en place le temps qu'on les lise
@@ -322,7 +368,7 @@ export function flightsForEvents(
           out.push({
             from: cellAnchor(event.playerId, index),
             to: DISCARD_PILE,
-            value: event.value,
+            value: (event.jokers ?? []).includes(index) ? JOKER_CARD : event.value,
             delay: cleared + rank * CLEAR_STAGGER,
           });
         });

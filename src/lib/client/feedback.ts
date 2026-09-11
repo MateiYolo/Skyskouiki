@@ -16,6 +16,7 @@ export type Cue =
   | 'place'
   | 'discard'
   | 'clear'
+  | 'steal'
   | 'yourTurn'
   | 'lastTurn'
   | 'win'
@@ -111,6 +112,8 @@ const HAPTICS: Record<Cue, number | number[]> = {
   place: 16,
   discard: 10,
   clear: [0, 30, 40, 60],
+  // Deux secousses qui se croisent : une carte part, une carte arrive.
+  steal: [0, 22, 60, 22],
   yourTurn: [0, 18, 90, 18],
   lastTurn: [0, 24, 60, 24, 60, 24],
   win: [0, 40, 60, 40, 60, 120],
@@ -163,6 +166,13 @@ export function cue(kind: Cue, delay = 0) {
       break;
     case 'clear':
       [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => note(f, t + i * 0.065, 0.28, 0.12));
+      break;
+    // Deux notes qui se croisent, une qui monte et une qui descend : c'est un
+    // échange, et ça ne doit ressembler ni à une prise ni à une élimination.
+    case 'steal':
+      note(392, t, 0.22, 0.1, 'triangle');
+      note(659.25, t + 0.06, 0.22, 0.1, 'triangle');
+      swoosh(t + 0.02, 0.16, 0.05);
       break;
     case 'yourTurn':
       note(659.25, t, 0.12, 0.09, 'sine');

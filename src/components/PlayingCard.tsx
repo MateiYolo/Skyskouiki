@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { memo, useMemo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { FLIP, SNAP } from '@/lib/client/motion';
+import { JOKER_CARD, STEAL_CARD, type PileCard } from '@/lib/skyjo';
 
 /**
  * Une carte Skyjo.
@@ -11,15 +12,23 @@ import { FLIP, SNAP } from '@/lib/client/motion';
  * Le code couleur est celui du jeu physique — bleu foncé pour les négatives,
  * cyan pour le zéro, puis vert / jaune / rouge à mesure que ça fait mal. C'est
  * ce qui permet de lire une grille adverse d'un coup d'œil, sans lire un chiffre.
+ *
+ * Les deux cartes du mode spicy sortent volontairement de cette échelle : elles
+ * ne valent pas « un peu plus » ou « un peu moins », elles font autre chose. Le
+ * joker est la seule carte presque blanche du jeu et le Vol la seule magenta —
+ * à la taille d'une vignette adverse, c'est la couleur qui les fait reconnaître
+ * avant le symbole.
  */
 
-export type Tone = 'navy' | 'sky' | 'green' | 'yellow' | 'red' | 'blank';
+export type Tone = 'navy' | 'sky' | 'green' | 'yellow' | 'red' | 'joker' | 'steal' | 'blank';
 
-export function toneOf(value: number): Tone {
-  if (value < 0) return 'navy';
-  if (value === 0) return 'sky';
-  if (value <= 4) return 'green';
-  if (value <= 8) return 'yellow';
+export function toneOf(card: PileCard): Tone {
+  if (card === JOKER_CARD) return 'joker';
+  if (card === STEAL_CARD) return 'steal';
+  if (card < 0) return 'navy';
+  if (card === 0) return 'sky';
+  if (card <= 4) return 'green';
+  if (card <= 8) return 'yellow';
   return 'red';
 }
 
@@ -29,6 +38,12 @@ const TONES: Record<Tone, { from: string; to: string; ink: string; edge: string 
   green: { from: '#6ed673', to: '#2f9138', ink: '#06280a', edge: '#a2eda6' },
   yellow: { from: '#ffdc5e', to: '#e0a908', ink: '#3d2b00', edge: '#ffeda1' },
   red: { from: '#ff7070', to: '#c22626', ink: '#ffffff', edge: '#ffa8a8' },
+  // Le joker vaut 0 et complète n'importe quel groupe : ni une bonne ni une
+  // mauvaise carte, donc aucune place sur l'échelle bleu → rouge.
+  joker: { from: '#fdfbff', to: '#c9bcec', ink: '#2a1a55', edge: '#ffffff' },
+  // Le Vol ne se pose jamais dans une grille : on ne le voit qu'en main, le
+  // temps d'un tour.
+  steal: { from: '#ff8adf', to: '#af1f8c', ink: '#ffffff', edge: '#ffc2ee' },
   // Retournée, mais pas encore lue : la carte a bougé au doigt, sa valeur
   // arrive du serveur. Une face neutre le dit sans rien inventer.
   blank: { from: '#57497e', to: '#332a55', ink: '#ffffff', edge: '#7b6bab' },
@@ -94,9 +109,16 @@ const INTENT_CLASS: Record<CardIntent, string> = {
   target: 'is-target',
 };
 
+/** Ce qu'une carte annonce aux lecteurs d'écran. */
+function describeCard(card: PileCard): string {
+  if (card === JOKER_CARD) return 'Joker, vaut 0 et complète n’importe quel groupe';
+  if (card === STEAL_CARD) return 'Carte Vol';
+  return `Carte ${card}`;
+}
+
 export interface PlayingCardProps {
   /** `null` quand la carte est face cachée : le client n'en connaît pas la valeur. */
-  value: number | null;
+  value: PileCard | null;
   faceUp: boolean;
   size?: CardSize;
   /** Met la carte en avant : c'est une cible jouable, et pourquoi. */
@@ -135,7 +157,7 @@ function Card({
   const face = FACE_STYLE[value === null ? (faceUp ? 'blank' : 'navy') : toneOf(value)];
   const interactive = !!onClick;
   const ring = INTENT_CLASS[intent];
-  const label = ariaLabel ?? (faceUp && value !== null ? `Carte ${value}` : 'Carte face cachée');
+  const label = ariaLabel ?? (faceUp && value !== null ? describeCard(value) : 'Carte face cachée');
   const flip = useMemo(() => ({ rotateY: faceUp ? 0 : 180 }), [faceUp]);
 
   const inner = (
@@ -159,7 +181,19 @@ function Card({
           ].join(' ')}
           style={face}
         >
-          <span className="tnum card-numeral font-black leading-none tracking-tight">{value}</span>
+          {value === JOKER_CARD ? (
+            // L'étoile dit « celle-là n'est pas comme les autres », le 0 dit ce
+            // qu'elle coûte. Sans le chiffre, la grille ne s'additionne plus de
+            // tête — et compter sa manche est la moitié du jeu.
+            <>
+              <span className="card-numeral font-black leading-none">★</span>
+              <span className="tnum card-corner absolute font-black leading-none">0</span>
+            </>
+          ) : value === STEAL_CARD ? (
+            <span className="card-numeral font-black leading-none">⇄</span>
+          ) : (
+            <span className="tnum card-numeral font-black leading-none tracking-tight">{value}</span>
+          )}
         </div>
 
         {/* Verso : le dos de carte */}

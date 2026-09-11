@@ -20,6 +20,12 @@
   --color-danger: #ff5a5f;
   --color-good: #4ade80;
 
+  /* Les deux cartes du mode spicy, hors de l'échelle bleu → rouge : le magenta
+     du Vol et le blanc du joker ne veulent pas dire « un peu plus » ou « un peu
+     moins », ils veulent dire « autre chose ». */
+  --color-steal: #e94ec0;
+  --color-joker: #e8e0ff;
+
   /* Code couleur officiel des cartes Skyjo. */
   --color-card-navy: #1b3a8f;
   --color-card-sky: #38bdf8;
@@ -186,6 +192,16 @@ button,
 /* Le losange du dos : un repère, pas un chiffre. */
 .card-pip {
   font-size: 20cqw;
+}
+
+/* La valeur au comptage du joker, en coin : l'étoile dit qu'il est spécial, ce
+   chiffre-là dit ce qu'il coûte. Assez petit pour ne pas se lire comme la
+   valeur d'une carte ordinaire, assez grand pour se lire tout de même. */
+.card-corner {
+  font-size: 17cqw;
+  right: 9cqw;
+  bottom: 6cqw;
+  opacity: 0.7;
 }
 
 /* Une case vidée : la colonne (ou la ligne) est partie à la défausse et ne

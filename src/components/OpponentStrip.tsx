@@ -26,11 +26,26 @@ interface Props {
   opponents: ViewPlayer[];
   move: LastMove | null;
   echo: MoveEcho | null;
+  /**
+   * Je tiens un Vol et j'ai désigné ma carte : il reste à choisir la victime.
+   *
+   * Les vignettes deviennent alors des cibles. On ne fait pas taper la carte
+   * adverse directement dedans — à huit joueurs une case y mesure quelques
+   * pixels — mais la vignette ouvre la grille en grand, où l'on vise.
+   */
+  picking?: boolean;
   onOpen: (playerId: string) => void;
 }
 
 /** Mémoïsée : la grille d'en face ne bouge que quand la partie bouge. */
-export const OpponentStrip = memo(function OpponentStrip({ view, opponents, move, echo, onOpen }: Props) {
+export const OpponentStrip = memo(function OpponentStrip({
+  view,
+  opponents,
+  move,
+  echo,
+  picking = false,
+  onOpen,
+}: Props) {
   // À deux — le cas de loin le plus fréquent — l'unique adversaire s'étale en
   // largeur : ses infos passent à gauche et toute la hauteur du panneau revient
   // à sa grille. À plusieurs, chacun reprend une colonne et la bande défile.
@@ -56,6 +71,8 @@ export const OpponentStrip = memo(function OpponentStrip({ view, opponents, move
           target={view.targetScore}
           move={move?.playerId === player.id ? move.text : null}
           echo={echo}
+          // Une grille sans carte visible n'a rien à se faire voler.
+          picking={picking && player.faceUpCount > 0}
           onOpen={() => onOpen(player.id)}
         />
       ))}
@@ -80,10 +97,21 @@ interface PanelProps {
   target: number;
   move: string | null;
   echo: MoveEcho | null;
+  picking: boolean;
   onOpen: () => void;
 }
 
-function OpponentPanel({ player, solo, active, closer, target, move, echo, onOpen }: PanelProps) {
+function OpponentPanel({
+  player,
+  solo,
+  active,
+  closer,
+  target,
+  move,
+  echo,
+  picking,
+  onOpen,
+}: PanelProps) {
   const identity = (
     <>
       <div className="flex items-center gap-1.5">
@@ -130,10 +158,16 @@ function OpponentPanel({ player, solo, active, closer, target, move, echo, onOpe
 
   const frame = [
     'flex min-h-0 shrink-0 rounded-2xl border p-1.5 text-left transition-colors',
-    active ? 'border-accent/60 bg-accent/10' : 'border-white/10 bg-white/[0.04]',
+    picking
+      ? 'border-steal/70 bg-steal/12'
+      : active
+        ? 'border-accent/60 bg-accent/10'
+        : 'border-white/10 bg-white/[0.04]',
   ].join(' ');
 
-  const label = `Voir la grille de ${player.name} en grand — ${player.totalScore} points au total, ${player.visibleSum} sur la manche`;
+  const label = picking
+    ? `Voler une carte à ${player.name}`
+    : `Voir la grille de ${player.name} en grand — ${player.totalScore} points au total, ${player.visibleSum} sur la manche`;
 
   if (solo) {
     // Face à face : exactement la disposition de ma propre grille, en miroir de
@@ -174,18 +208,27 @@ function OpponentPanel({ player, solo, active, closer, target, move, echo, onOpe
   );
 }
 
-/** La grille d'un adversaire en grand, quand on veut vraiment la détailler. */
+/**
+ * La grille d'un adversaire en grand, quand on veut vraiment la détailler — et
+ * l'endroit où l'on choisit la carte qu'on lui vole.
+ *
+ * Les deux usages tiennent dans la même fiche : c'est la seule vue de
+ * l'application où une carte adverse fait la taille d'un doigt.
+ */
 export function OpponentSheet({
   player,
   active,
   closer,
   target,
+  onPick,
   onClose,
 }: {
   player: ViewPlayer;
   active: boolean;
   closer: boolean;
   target: number;
+  /** Non nul pendant un Vol : tape une carte visible pour l'échanger. */
+  onPick?: (index: number) => void;
   onClose: () => void;
 }) {
   return (
@@ -217,7 +260,20 @@ export function OpponentSheet({
           )}
         </div>
 
-        <PlayerGrid grid={player.grid} size="md" />
+        {onPick && (
+          <p className="mb-2 rounded-xl border border-steal/50 bg-steal/12 px-3 py-2 text-center text-[0.72rem] font-semibold text-steal">
+            Tape la carte que tu prends — la tienne part à sa place.
+          </p>
+        )}
+
+        <PlayerGrid
+          grid={player.grid}
+          size="md"
+          isTarget={
+            onPick ? (index) => !!player.grid[index] && player.grid[index]!.faceUp : undefined
+          }
+          onCell={onPick}
+        />
 
         <div className="mt-4">
           <ScoreMeter score={player.totalScore} target={target} />
