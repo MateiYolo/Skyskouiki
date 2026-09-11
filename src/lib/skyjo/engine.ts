@@ -14,12 +14,14 @@ import {
   gridSum,
   isFullyRevealed,
   nextRandom,
+  returnToDrawPile,
   seedStealCards,
   shuffle,
   STEAL_COUNT,
 } from './rules';
 import {
   GRID_SIZE,
+  JOKER_CARD,
   isStealCard,
   type Action,
   type ActionResult,
@@ -284,33 +286,42 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       const mine = cellAt(thief.grid, action.index);
       const theirs = cellAt(victim.grid, action.targetIndex);
       if (!mine || !theirs) return fail('Case invalide.');
-      // Face visible des deux côtés : l'échange est entièrement connu de tout
-      // le monde avant d'être joué. Un vol à l'aveugle serait une loterie, et
-      // surtout la victime ne pourrait rien en lire.
-      if (!mine.faceUp || !theirs.faceUp)
-        return fail('L’échange ne porte que sur des cartes face visible.');
 
-      // Les deux cases échangent leur carte entière, drapeau de joker compris :
-      // le joker se vole comme n'importe quelle autre, et c'est même le vol le
-      // plus rentable de la manche.
+      // Les deux cases échangent leur carte entière — drapeau de joker et face
+      // comprise. La face voyage avec la carte, et c'est ce qui garde
+      // l'information du jeu cohérente : ce qui était sur la table reste connu
+      // de tous, ce qui était sur le dos ne l'est de personne, pas même de son
+      // nouveau propriétaire. Un vol à l'aveugle est donc un vrai pari — pour
+      // les deux côtés.
       const given = cellToCard(mine);
       const taken = cellToCard(theirs);
-      setCellCard(mine, taken);
-      setCellCard(theirs, given);
+      const mineUp = mine.faceUp;
+      const theirsUp = theirs.faceUp;
+      setCellCard(mine, taken, theirsUp);
+      setCellCard(theirs, given, mineUp);
       events.push({
         type: 'stole',
         playerId: thief.id,
         index: action.index,
-        taken,
+        // Une carte qui reste cachée n'est annoncée à personne : l'événement
+        // part à tous les écrans, et il n'a pas à révéler ce que la grille
+        // continue de cacher.
+        taken: theirsUp ? taken : null,
         targetPlayerId: victim.id,
         targetIndex: action.targetIndex,
-        given,
+        given: mineUp ? given : null,
       });
       // Les deux grilles rejouent leurs éliminations : le voleur peut prendre
       // la carte qui ferme sa colonne, et laisser à sa victime celle qui ferme
-      // la sienne. Un échange reste pourtant neutre sur le nombre de cartes
-      // face cachée de chacun — il ne peut donc jamais faire fermer la manche
-      // par quelqu'un d'autre que celui qui joue.
+      // la sienne.
+      //
+      // L'échange déplace aussi les faces : donner sa dernière carte cachée
+      // contre une carte visible ferme la manche sur-le-champ, et c'est
+      // `endTurn` qui s'en aperçoit, comme pour n'importe quel autre coup. La
+      // victime, elle, peut se retrouver entièrement retournée sans avoir rien
+      // joué — elle ne ferme la manche qu'à son propre tour : on ne fait pas
+      // encaisser à quelqu'un la pénalité d'une fermeture qu'il n'a pas
+      // choisie.
       resolveGroups(s, thief, events);
       resolveGroups(s, victim, events);
       endTurn(s, events);
@@ -441,8 +452,15 @@ function maybeStartPlay(s: GameState, events: GameEvent[]) {
 }
 
 function resolveGroups(s: GameState, player: Player, events: GameEvent[]) {
-  for (const cleared of clearGroups(player.grid, s.discardPile)) {
+  const { groups, jokers } = clearGroups(player.grid, s.discardPile);
+  for (const cleared of groups) {
     events.push({ type: 'groupCleared', playerId: player.id, ...cleared });
+  }
+  // Le joker qui vient de fermer un groupe retourne dans la pioche au lieu de
+  // se poser sur la défausse : personne ne le ramasse gratuitement au tour
+  // suivant (cf. `returnToDrawPile`).
+  for (let i = 0; i < jokers; i++) {
+    s.seed = returnToDrawPile(s.drawPile, JOKER_CARD, s.seed);
   }
 }
 

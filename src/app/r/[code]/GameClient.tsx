@@ -62,7 +62,7 @@ function prompt(view: GameView, stealFrom: number | null): { title: string; hint
       // reste à faire, sinon le premier tap semble n'avoir rien déclenché.
       if (view.turnStep === 'stealing') {
         return stealFrom === null
-          ? { title: 'Vol !', hint: 'Donne une de tes cartes visibles — ou renonce.' }
+          ? { title: 'Vol !', hint: 'Donne une de tes cartes, visible ou cachée — ou renonce.' }
           : {
               title: 'Contre laquelle ?',
               hint: 'Ouvre la grille d’un adversaire et tape la carte que tu prends.',
@@ -203,9 +203,10 @@ export function GameClient({ code }: { code: string }) {
         return !cell.faceUp && me.faceUpCount + revealing.length < 2;
       }
       if (legal.has('placeCard')) return true;
+      // Un Vol échange n'importe laquelle de mes cartes, dos compris : donner
+      // une carte qu'on n'a jamais vue est un coup à part entière.
+      if (legal.has('steal')) return true;
       if (legal.has('flipCard')) return !cell.faceUp;
-      // Un Vol n'échange que des cartes visibles, des deux côtés.
-      if (legal.has('steal')) return cell.faceUp;
       return false;
     },
     [legal, me, revealing],
@@ -291,9 +292,10 @@ export function GameClient({ code }: { code: string }) {
   // Résolu au rendu : un joueur qui quitte referme sa fiche de lui-même.
   const inspected = opponents.find((p) => p.id === inspecting) ?? null;
 
-  // Pendant un échange n'importe quelle case fait l'affaire : douze liserés
-  // jaunes ne désignent rien et couvrent la seule chose à lire, les cartes.
-  const markTargets = !legal.has('placeCard');
+  // Quand *toutes* les cases sont jouables — une carte à poser, une carte à
+  // donner au Vol — douze liserés jaunes ne désignent rien et couvrent la seule
+  // chose à lire, les cartes.
+  const markTargets = !legal.has('placeCard') && !legal.has('steal');
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">

@@ -21,10 +21,15 @@ distribuer. Il n'ajoute rien au tour de jeu — ni au comptage, ni aux
 éliminations, ni à la pénalité de fermeture : il ajoute trois cartes au paquet.
 **Deux -5**, du point sec (à deux exemplaires, une colonne de -5 reste
 impossible). **Un joker**, qui vaut 0 et complète n'importe quel groupe : une
-colonne `7 / joker / 7` saute. Et **quatre cartes Vol**, qui échangent une de
-tes cartes face visible contre celle d'un adversaire, face visible aussi — les
-deux grilles rejouant alors leurs éliminations, si bien qu'on peut prendre la
-carte qui ferme sa colonne comme laisser à sa victime celle qui ferme la sienne.
+colonne `7 / joker / 7` saute — et quand il ferme un groupe, il retourne dans la
+pioche au lieu de se poser sur la défausse, où le joueur suivant n'aurait eu
+qu'à se servir. Et **quatre cartes Vol**, qui échangent une de tes cartes contre
+celle d'un adversaire, **face visible ou non** : la carte garde sa face en
+changeant de grille, donc un dos volé reste un dos — personne ne l'a vu, pas
+même le voleur — et le nombre de dos change de camp, jusqu'à fermer la manche
+quand on donne son dernier. Les deux grilles rejouent ensuite leurs
+éliminations, si bien qu'on peut prendre la carte qui ferme sa colonne comme
+laisser à sa victime celle qui ferme la sienne.
 
 Le Vol n'a pas de valeur, donc pas de place dans une grille : il n'existe que
 dans la pioche, et ne se déclenche qu'en étant *pioché*. Ce n'est pas un détail
@@ -117,10 +122,11 @@ chaque règle y a son test nommé en français, les officielles comme la maison 
 dont un test qui vérifie que trois cartes identiques dans une ligne intacte ne
 suffisent *pas*, et un autre que les mêmes trois cartes suffisent dès qu'une
 colonne éliminée a raccourci la ligne. Le mode spicy y a ses propres sections :
-qu'un Vol ne se trouve jamais ailleurs que dans la pioche, qu'un échange ne
-change le nombre de cartes cachées de personne, que renoncer coûte un
-retournement, qu'un joker complète une colonne et une ligne du même coup, et
-qu'il perd son pouvoir dès qu'on pose une carte dessus.
+qu'un Vol ne se trouve jamais ailleurs que dans la pioche, qu'un dos échangé
+reste caché et ne s'annonce à personne, que renoncer coûte un retournement,
+qu'un joker complète une colonne et une ligne du même coup, qu'il rentre alors
+dans la pioche et pas à la défausse, et qu'il perd son pouvoir dès qu'on pose
+une carte dessus.
 
 `npm run smoke` joue deux parties complètes par HTTP, une par mode. Les règles
 du vol et du joker sont couvertes au coup par coup côté moteur, avec une graine

@@ -163,6 +163,26 @@ export function seedStealCards(
   return { pile: items, seed: next };
 }
 
+/**
+ * Remet une carte dans la pioche, à une position tirée au sort.
+ *
+ * Sert au joker qui vient de fermer un groupe : posé sur la défausse, il se
+ * ramassait au tour suivant par celui qui jouait après — la carte la plus forte
+ * du paquet offerte à quelqu'un qui n'avait rien fait pour l'avoir, et souvent
+ * au dernier joueur d'une manche qui se fermait. Rendu à la pioche, il reste en
+ * jeu et peut revenir, mais il ne se sert plus : il se tire.
+ *
+ * N'importe où dans la pile, pas dessous : enfoui, il ne ressortirait jamais
+ * d'une manche, ce qui reviendrait à le retirer du jeu.
+ *
+ * Mute `pile`. Renvoie la graine suivante.
+ */
+export function returnToDrawPile(pile: PileCard[], card: PileCard, seed: number): number {
+  const { value, seed: next } = nextRandom(seed);
+  pile.splice(Math.floor(value * (pile.length + 1)), 0, card);
+  return next;
+}
+
 /** PRNG déterministe (mulberry32) : même graine = même partie, donc tests reproductibles. */
 export function nextRandom(seed: number): { value: number; seed: number } {
   const t = (seed + 0x6d2b79f5) | 0;
@@ -274,6 +294,19 @@ export interface ClearedGroup {
   jokers: number[];
 }
 
+export interface ClearOutcome {
+  groups: ClearedGroup[];
+  /**
+   * Combien de jokers ces éliminations ont retirés de la grille.
+   *
+   * Ils ne sont pas partis à la défausse avec le reste du groupe : c'est à
+   * l'appelant de les remettre en jeu (cf. `returnToDrawPile`). Un compte, et
+   * pas les cases : une même case peut fermer une colonne *et* une ligne, et
+   * ce qui se remet en jeu, c'est une carte, pas deux.
+   */
+  jokers: number;
+}
+
 /**
  * Élimine les groupes de cartes identiques face visible : les colonnes de trois
  * (règle officielle) et les lignes entièrement homogènes (règle maison). Les
@@ -289,10 +322,16 @@ export interface ClearedGroup {
  * de trois homogène (cf. `MIN_GROUP`) et doit partir à son tour. Chaque passe
  * retire au moins une carte, donc la boucle s'arrête.
  *
+ * Le joker fait exception à la destination : il ne se pose pas sur la défausse,
+ * il est rendu à l'appelant pour repartir dans la pioche (cf.
+ * `returnToDrawPile`). C'est la seule carte du paquet qui vaut la peine d'être
+ * ramassée, et sur la défausse le joueur suivant n'avait qu'à se servir.
+ *
  * Mute `grid` et `discardPile`.
  */
-export function clearGroups(grid: Cell[], discardPile: ValueCard[]): ClearedGroup[] {
-  const all: ClearedGroup[] = [];
+export function clearGroups(grid: Cell[], discardPile: ValueCard[]): ClearOutcome {
+  const groups: ClearedGroup[] = [];
+  let jokers = 0;
 
   for (;;) {
     const found: ClearedGroup[] = [];
@@ -307,14 +346,15 @@ export function clearGroups(grid: Cell[], discardPile: ValueCard[]): ClearedGrou
     for (let col = 0; col < COLS; col++) collect('column', col, columnIndices(col));
     for (let row = 0; row < ROWS; row++) collect('row', row, rowIndices(row));
 
-    if (found.length === 0) return all;
+    if (found.length === 0) return { groups, jokers };
 
     for (const i of new Set(found.flatMap((group) => group.cells))) {
-      // Le joker repart à la défausse en joker : il continue de circuler.
-      discardPile.push(cellToCard(grid[i]!));
+      const card = cellToCard(grid[i]!);
+      if (isJokerCard(card)) jokers++;
+      else discardPile.push(card);
       grid[i] = null;
     }
 
-    all.push(...found);
+    groups.push(...found);
   }
 }
