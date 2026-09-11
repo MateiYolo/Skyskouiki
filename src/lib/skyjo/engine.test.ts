@@ -3,6 +3,7 @@ import { applyAction, createGame } from './engine';
 import {
   DECK_COMPOSITION,
   DECK_SIZE,
+  JOKER_COOLDOWN_LAPS,
   JOKER_COUNT,
   SPICY_COMPOSITION,
   SPICY_DECK_SIZE,
@@ -11,6 +12,7 @@ import {
   cardToCell,
   columnIndices,
   gridSum,
+  jokerReturnDepth,
   rowIndices,
   shuffle,
 } from './rules';
@@ -1050,6 +1052,47 @@ describe('le joker', () => {
     expect(s.drawPile).toHaveLength(pileBefore + 1);
     // Mélangé dedans, pas enfoui dessous : il peut ressortir dans la manche.
     expect(countCard(s.drawPile, JOKER_CARD)).toBe(1);
+  });
+
+  it('rentre assez loin pour que personne ne le repioche dans la foulée', () => {
+    // Le bug : « quelque part dans la pioche » incluait le dessus. Le joker
+    // rendu se repiochait deux tours plus tard, et c'était l'adversaire qui
+    // l'avait — exactement ce que le retour à la pioche devait empêcher.
+    //
+    // La graine décide du point de chute : ce n'est donc pas un tirage qu'on
+    // vérifie ici, c'est un plancher, et il doit tenir sur tous.
+    const depths = new Set<number>();
+    for (let seed = 0; seed < 120; seed++) {
+      let s = startedSpicy(2, seed);
+      const id = s.players[s.currentPlayerIndex].id;
+      setGrid(s, id, [1, 7, 4, 6, 2, JOKER_CARD, 5, 10, 3, 9, 11, 8]);
+      s.discardPile.push(7);
+      // Selon la graine, le joker du paquet dort déjà dans la pioche : on l'en
+      // retire, sans quoi on mesurerait sa place à lui et pas celle du nôtre.
+      s.drawPile = s.drawPile.filter((card) => card !== JOKER_CARD);
+      const floor = jokerReturnDepth(s.drawPile.length, s.players.length);
+
+      s = play(s, { type: 'takeDiscard', playerId: id });
+      s = play(s, { type: 'placeCard', playerId: id, index: 9 });
+
+      // On pioche par la fin du tableau : ce qui le suit est ce qui sortira
+      // avant lui, donc autant de tirages qu'il faudra attendre.
+      const depth = s.drawPile.length - 1 - s.drawPile.indexOf(JOKER_CARD);
+      expect(depth).toBeGreaterThanOrEqual(floor);
+      depths.add(depth);
+    }
+    // Un plancher, pas une place fixe : il retombe toujours ailleurs.
+    expect(depths.size).toBeGreaterThan(1);
+  });
+
+  it('attend d’autant plus de tours que la table est grande, sans s’enterrer', () => {
+    // Un tour de table consomme au plus une carte par joueur.
+    expect(jokerReturnDepth(120, 2)).toBe(2 * JOKER_COOLDOWN_LAPS);
+    expect(jokerReturnDepth(120, 8)).toBe(8 * JOKER_COOLDOWN_LAPS);
+    // Pioche courte : le plancher se rabat sur la moitié, sinon il enterrerait
+    // la carte au lieu de la faire patienter.
+    expect(jokerReturnDepth(10, 8)).toBe(5);
+    expect(jokerReturnDepth(0, 4)).toBe(0);
   });
 
   it('repart à la défausse comme les autres quand on le recouvre', () => {

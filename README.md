@@ -23,7 +23,9 @@ distribuer. Il n'ajoute rien au tour de jeu — ni au comptage, ni aux
 impossible). **Un joker**, qui vaut 0 et complète n'importe quel groupe : une
 colonne `7 / joker / 7` saute — et quand il ferme un groupe, il retourne dans la
 pioche au lieu de se poser sur la défausse, où le joueur suivant n'aurait eu
-qu'à se servir. Et **quatre cartes Vol**, qui échangent une de tes cartes contre
+qu'à se servir. Pas sur le dessus de la pioche pour autant : quelques tours de
+table le séparent du moment où il peut ressortir, sinon le rendre revenait une
+fois sur trente à le passer directement à l'adversaire. Et **quatre cartes Vol**, qui échangent une de tes cartes contre
 celle d'un adversaire, **face visible ou non** : la carte garde sa face en
 changeant de grille, donc un dos volé reste un dos — personne ne l'a vu, pas
 même le voleur — et le nombre de dos change de camp, jusqu'à fermer la manche
@@ -125,8 +127,9 @@ colonne éliminée a raccourci la ligne. Le mode spicy y a ses propres sections 
 qu'un Vol ne se trouve jamais ailleurs que dans la pioche, qu'un dos échangé
 reste caché et ne s'annonce à personne, que renoncer coûte un retournement,
 qu'un joker complète une colonne et une ligne du même coup, qu'il rentre alors
-dans la pioche et pas à la défausse, et qu'il perd son pouvoir dès qu'on pose
-une carte dessus.
+dans la pioche et pas à la défausse, assez loin du dessus pour que personne ne
+le repioche dans la foulée, et qu'il perd son pouvoir dès qu'on pose une carte
+dessus.
 
 `npm run smoke` joue deux parties complètes par HTTP, une par mode. Les règles
 du vol et du joker sont couvertes au coup par coup côté moteur, avec une graine

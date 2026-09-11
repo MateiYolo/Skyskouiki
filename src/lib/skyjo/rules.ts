@@ -164,7 +164,39 @@ export function seedStealCards(
 }
 
 /**
- * Remet une carte dans la pioche, à une position tirée au sort.
+ * Nombre de tours de table que le joker passe au minimum dans la pioche avant
+ * de pouvoir en ressortir.
+ *
+ * « Quelque part dans la pioche » suffisait en théorie et pas en pratique :
+ * tiré uniformément, le joker pouvait retomber sur le dessus, et il se
+ * repiochait deux tours plus tard. Le hasard était honnête, ce qui se lisait à
+ * table ne l'était pas — on venait de le rendre, l'adversaire l'avait. Une
+ * carte rendue à la pioche doit d'abord disparaître.
+ *
+ * Trois tours de table, comptés en cartes piochées : un tour ne suffit pas à
+ * faire oublier d'où la carte vient, et au-delà on ne fixe plus un délai, on
+ * enterre la carte.
+ */
+export const JOKER_COOLDOWN_LAPS = 3;
+
+/**
+ * À combien de cartes du dessus de la pioche le joker doit rentrer.
+ *
+ * Le délai se compte en tours de table (cf. `JOKER_COOLDOWN_LAPS`) : un tour
+ * consomme au plus une carte par joueur, donc `joueurs × tours` cartes
+ * au-dessus de lui garantissent autant de tours avant qu'il ne puisse revenir.
+ *
+ * Plafonné à la moitié de la pioche, parce qu'une pioche courte — fin de
+ * manche, table pleine — ferait de ce plancher un enfouissement, et le joker
+ * doit rester tirable : il attend, il ne sort pas du jeu.
+ */
+export function jokerReturnDepth(pileLength: number, playerCount: number): number {
+  return Math.min(playerCount * JOKER_COOLDOWN_LAPS, Math.floor(pileLength / 2));
+}
+
+/**
+ * Remet une carte dans la pioche, à une position tirée au sort, avec au moins
+ * `minDepth` cartes au-dessus d'elle.
  *
  * Sert au joker qui vient de fermer un groupe : posé sur la défausse, il se
  * ramassait au tour suivant par celui qui jouait après — la carte la plus forte
@@ -172,14 +204,23 @@ export function seedStealCards(
  * au dernier joueur d'une manche qui se fermait. Rendu à la pioche, il reste en
  * jeu et peut revenir, mais il ne se sert plus : il se tire.
  *
- * N'importe où dans la pile, pas dessous : enfoui, il ne ressortirait jamais
- * d'une manche, ce qui reviendrait à le retirer du jeu.
+ * N'importe où sous ces `minDepth` cartes, pas dessous : enfoui, il ne
+ * ressortirait jamais d'une manche, ce qui reviendrait à le retirer du jeu.
+ *
+ * On pioche par le haut, donc par la fin du tableau : insérer à l'indice `i`
+ * laisse `pile.length - i` cartes à tirer avant celle-ci.
  *
  * Mute `pile`. Renvoie la graine suivante.
  */
-export function returnToDrawPile(pile: PileCard[], card: PileCard, seed: number): number {
+export function returnToDrawPile(
+  pile: PileCard[],
+  card: PileCard,
+  seed: number,
+  minDepth = 0,
+): number {
   const { value, seed: next } = nextRandom(seed);
-  pile.splice(Math.floor(value * (pile.length + 1)), 0, card);
+  const deepest = Math.max(0, pile.length - Math.max(0, minDepth));
+  pile.splice(Math.floor(value * (deepest + 1)), 0, card);
   return next;
 }
 
