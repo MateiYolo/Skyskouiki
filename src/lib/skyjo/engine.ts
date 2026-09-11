@@ -13,6 +13,7 @@ import {
   emptyGrid,
   gridSum,
   isFullyRevealed,
+  jokerReturnDepth,
   nextRandom,
   returnToDrawPile,
   seedStealCards,
@@ -458,9 +459,13 @@ function resolveGroups(s: GameState, player: Player, events: GameEvent[]) {
   }
   // Le joker qui vient de fermer un groupe retourne dans la pioche au lieu de
   // se poser sur la défausse : personne ne le ramasse gratuitement au tour
-  // suivant (cf. `returnToDrawPile`).
+  // suivant (cf. `returnToDrawPile`). Et pas sur le dessus : quelques tours de
+  // table le séparent du moment où il peut ressortir (cf. `jokerReturnDepth`),
+  // sans quoi le rendre à la pioche revenait à le passer à l'adversaire une
+  // fois sur trente.
   for (let i = 0; i < jokers; i++) {
-    s.seed = returnToDrawPile(s.drawPile, JOKER_CARD, s.seed);
+    const depth = jokerReturnDepth(s.drawPile.length, s.players.length);
+    s.seed = returnToDrawPile(s.drawPile, JOKER_CARD, s.seed, depth);
   }
 }
 

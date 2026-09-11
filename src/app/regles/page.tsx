@@ -235,6 +235,12 @@ export default function RulesPage() {
           pas.
         </p>
         <p>
+          Et <Key>jamais sur le dessus</Key>&nbsp;: il rentre sous plusieurs tours de table de
+          cartes, de quoi le faire oublier avant qu’il ne ressorte. Une pioche, ça se mélange
+          honnêtement&nbsp;— mais un joker rendu qui retombe entre les mains d’en face deux tours
+          plus tard, ça ne se lit pas comme du hasard.
+        </p>
+        <p>
           En revanche, si tu <Key>poses une carte dessus</Key>, il s’en va à la défausse comme
           n’importe quelle autre&nbsp;— et là, oui, quelqu’un peut le reprendre. Et trois jokers ne
           feraient pas un groupe&nbsp;: il n’y aurait aucune valeur sur laquelle s’accorder. C’est
