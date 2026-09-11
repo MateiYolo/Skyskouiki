@@ -264,7 +264,7 @@ export const TableCenter = memo(function TableCenter({
                     size="lg"
                     aria-label={
                       stealing
-                        ? 'Carte Vol : échange une carte visible avec un adversaire'
+                        ? 'Carte Vol : échange une de tes cartes avec un adversaire'
                         : heldVisible
                           ? `Carte en main : ${heldCard}`
                           : 'Carte en main, face cachée'

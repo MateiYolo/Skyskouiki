@@ -224,13 +224,21 @@ export default function RulesPage() {
         <p>
           <Key>Un joker</Key>, un seul. Il vaut <Key>0</Key>, et il complète{' '}
           <Key>n’importe quel groupe</Key>&nbsp;: une colonne <Key>7 / joker / 7</Key> saute comme
-          une colonne de trois 7. Il peut fermer une colonne et une ligne du même coup, et il repart
-          à la défausse en joker — quelqu’un d’autre le récupérera.
+          une colonne de trois 7. Il peut fermer une colonne et une ligne du même coup.
         </p>
         <p>
-          Attention&nbsp;: dès qu’on <Key>pose une carte dessus</Key>, il s’en va et la case
-          redevient ordinaire. Et trois jokers ne feraient pas un groupe&nbsp;— il n’y aurait aucune
-          valeur sur laquelle s’accorder. C’est aussi pour ça qu’il n’y en a qu’un.
+          Quand il ferme un groupe, il ne part <Key>pas</Key> à la défausse avec les autres&nbsp;:
+          il <Key>retourne dans la pioche</Key>, mélangé quelque part dedans. Sinon, le joueur
+          suivant n’avait qu’à se servir — la meilleure carte du paquet offerte à quelqu’un qui
+          n’avait rien fait pour l’avoir, souvent au dernier joueur d’une manche qu’on venait de
+          fermer. Il reste en jeu, et il peut revenir&nbsp;: mais il se pioche, il ne se ramasse
+          pas.
+        </p>
+        <p>
+          En revanche, si tu <Key>poses une carte dessus</Key>, il s’en va à la défausse comme
+          n’importe quelle autre&nbsp;— et là, oui, quelqu’un peut le reprendre. Et trois jokers ne
+          feraient pas un groupe&nbsp;: il n’y aurait aucune valeur sur laquelle s’accorder. C’est
+          aussi pour ça qu’il n’y en a qu’un.
         </p>
       </Section>
 
@@ -242,9 +250,19 @@ export default function RulesPage() {
         </p>
         <p>
           Quand tu en pioches une, tu ne la prends pas en main&nbsp;: tu <Key>échanges une de tes
-          cartes face visible contre celle d’un adversaire</Key>, face visible aussi. Les deux côtés
-          sont donc connus de tout le monde avant que tu ne choisisses&nbsp;— pas de vol à
-          l’aveugle.
+          cartes contre celle d’un adversaire</Key>. <Key>N’importe laquelle</Key>, de chaque
+          côté&nbsp;— une carte visible, ou un dos.
+        </p>
+        <p>
+          La carte garde sa face en changeant de grille&nbsp;: un dos arrive chez toi sans se
+          retourner, et <Key>personne ne l’a vu</Key>, pas même toi. C’est tout l’intérêt&nbsp;:
+          refiler ton 12 pour un inconnu, ou lui prendre un dos au hasard en espérant mieux. Une
+          carte visible, elle, arrive visible.
+        </p>
+        <p>
+          Attention&nbsp;: le nombre de <Key>dos change de camp</Key>. Donner ton dernier dos contre
+          une carte visible retourne toute ta grille&nbsp;— et <Key>ferme la manche</Key> sur-le-
+          champ, pénalité comprise.
         </p>
         <p>
           Et les <Key>deux grilles</Key> rejouent leurs éliminations. Tu peux prendre la carte qui

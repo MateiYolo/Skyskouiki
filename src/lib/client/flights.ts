@@ -119,12 +119,16 @@ function swap(cell: string, arriving: ValueCard, leaving: ValueCard | null): Fli
  * partent en même temps, chacune vers la case de l'autre. C'est le seul
  * mouvement du jeu qui traverse le terrain dans les deux sens à la fois, et
  * c'est exactement ce qu'un vol est.
+ *
+ * Une carte face cachée voyage sur son dos (`value: null`) : elle change de
+ * grille sans se retourner, et le trajet ne doit pas en dire plus que la
+ * table.
  */
 function cross(
   thiefCell: string,
   victimCell: string,
-  given: ValueCard,
-  taken: ValueCard,
+  given: ValueCard | null,
+  taken: ValueCard | null,
 ): FlightRequest[] {
   return [
     { from: thiefCell, to: thiefCell, value: given, delay: 0, hold: FLIGHT_NEXT },
@@ -278,8 +282,11 @@ function discardLandings(
         break;
       case 'groupCleared':
         event.cells.forEach((index, rank) => {
+          // Le joker s'en retourne dans la pioche : il ne se pose jamais sur la
+          // défausse, donc il n'a rien à y recouvrir.
+          if ((event.jokers ?? []).includes(index)) return;
           landings.push({
-            value: (event.jokers ?? []).includes(index) ? JOKER_CARD : event.value,
+            value: event.value,
             at: clearedAt + rank * CLEAR_STAGGER + FLIGHT_DURATION,
             mine: event.playerId === view.you.id,
           });
@@ -365,10 +372,15 @@ export function flightsForEvents(
       // (`ClearGhost`), puis partent à la défausse l'une après l'autre.
       case 'groupCleared':
         event.cells.forEach((index, rank) => {
+          // Le joker ne suit pas le groupe : il repart dans la pioche, et le
+          // trajet doit le montrer. Le voir se poser sur la défausse ferait
+          // croire qu'on peut le reprendre au coup suivant — c'est précisément
+          // ce que la règle lui interdit.
+          const joker = (event.jokers ?? []).includes(index);
           out.push({
             from: cellAnchor(event.playerId, index),
-            to: DISCARD_PILE,
-            value: (event.jokers ?? []).includes(index) ? JOKER_CARD : event.value,
+            to: joker ? DRAW_PILE : DISCARD_PILE,
+            value: joker ? JOKER_CARD : event.value,
             delay: cleared + rank * CLEAR_STAGGER,
           });
         });

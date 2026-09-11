@@ -71,8 +71,9 @@ export const OpponentStrip = memo(function OpponentStrip({
           target={view.targetScore}
           move={move?.playerId === player.id ? move.text : null}
           echo={echo}
-          // Une grille sans carte visible n'a rien à se faire voler.
-          picking={picking && player.faceUpCount > 0}
+          // Une grille entièrement éliminée n'a plus rien à se faire voler —
+          // une carte face cachée, si.
+          picking={picking && player.faceUpCount + player.faceDownCount > 0}
           onOpen={() => onOpen(player.id)}
         />
       ))}
@@ -227,7 +228,7 @@ export function OpponentSheet({
   active: boolean;
   closer: boolean;
   target: number;
-  /** Non nul pendant un Vol : tape une carte visible pour l'échanger. */
+  /** Non nul pendant un Vol : tape une de ses cartes pour l'échanger. */
   onPick?: (index: number) => void;
   onClose: () => void;
 }) {
@@ -262,16 +263,16 @@ export function OpponentSheet({
 
         {onPick && (
           <p className="mb-2 rounded-xl border border-steal/50 bg-steal/12 px-3 py-2 text-center text-[0.72rem] font-semibold text-steal">
-            Tape la carte que tu prends — la tienne part à sa place.
+            Tape la carte que tu prends, même un dos — la tienne part à sa place.
           </p>
         )}
 
+        {/* Toutes ses cartes sont à prendre, les dos compris : ce qui reste
+            impossible, c'est une case déjà vidée par une élimination. */}
         <PlayerGrid
           grid={player.grid}
           size="md"
-          isTarget={
-            onPick ? (index) => !!player.grid[index] && player.grid[index]!.faceUp : undefined
-          }
+          isTarget={onPick ? (index) => !!player.grid[index] : undefined}
           onCell={onPick}
         />
 

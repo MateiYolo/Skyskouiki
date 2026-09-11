@@ -106,7 +106,7 @@ export function EventLayer({ view }: { view: GameView }) {
             ? {
                 id: nextId++,
                 title: 'Vol !',
-                subtitle: 'Une de tes cartes visibles contre une des leurs',
+                subtitle: 'Une de tes cartes contre une des leurs, dos compris',
                 tone: 'good',
                 hold: 2800,
               }
@@ -122,8 +122,11 @@ export function EventLayer({ view }: { view: GameView }) {
           // Les deux cartes se croisent d'abord, puis se posent : c'est là que
           // l'échange s'entend.
           cue('steal', FLIGHT_NEXT + FLIGHT_DURATION);
-          const taken = cardName(event.taken);
-          const given = cardName(event.given);
+          // Une carte échangée face cachée n'a pas de nom : elle a traversé la
+          // table sans se retourner, et l'annonce n'en sait pas plus que la
+          // grille.
+          const taken = event.taken === null ? 'une carte cachée' : cardName(event.taken);
+          const given = event.given === null ? 'une carte cachée' : cardName(event.given);
           if (mine(event.playerId)) {
             freshHero = {
               id: nextId++,

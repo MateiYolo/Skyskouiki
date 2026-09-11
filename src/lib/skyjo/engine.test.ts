@@ -15,7 +15,7 @@ import {
   shuffle,
 } from './rules';
 import { legalActionsFor, toView } from './view';
-import { JOKER_CARD, STEAL_CARD } from './types';
+import { GRID_SIZE, JOKER_CARD, STEAL_CARD } from './types';
 import type { Action, Cell, GameState, PileCard, ValueCard } from './types';
 
 // --- utilitaires de test ----------------------------------------------------
@@ -804,7 +804,7 @@ describe('la carte Vol', () => {
     expect(countCard(s.drawPile, STEAL_CARD)).toBe(0);
   });
 
-  it('échange deux cartes visibles sans changer le nombre de cartes cachées', () => {
+  it('échange deux cartes visibles, sans toucher aux dos de part et d’autre', () => {
     let s = startedSpicy(2);
     const id = s.players[s.currentPlayerIndex].id;
     const other = opponentOf(s, id);
@@ -831,22 +831,74 @@ describe('la carte Vol', () => {
     expect(s.players[s.currentPlayerIndex].id).toBe(other);
   });
 
-  it('refuse une carte face cachée, des deux côtés', () => {
+  it('échange aussi deux dos, qui restent cachés et muets', () => {
     let s = startedSpicy(2);
     const id = s.players[s.currentPlayerIndex].id;
     const other = opponentOf(s, id);
     setGridWithHidden(s, id, [...CLEAN]);
-    setGridWithHidden(s, other, [...CLEAN]);
+    setGridWithHidden(s, other, [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
     s = drawSteal(s, id);
 
-    // Sa carte cachée (index 11).
-    expect(
-      expectFail(s, { type: 'steal', playerId: id, index: 0, targetPlayerId: other, targetIndex: 11 }),
-    ).toMatch(/face visible/);
-    // La mienne.
-    expect(
-      expectFail(s, { type: 'steal', playerId: id, index: 11, targetPlayerId: other, targetIndex: 0 }),
-    ).toMatch(/face visible/);
+    s = play(s, { type: 'steal', playerId: id, index: 11, targetPlayerId: other, targetIndex: 11 });
+
+    // Les deux cartes ont changé de grille sans se retourner.
+    expect(gridOf(s, id)[11]).toEqual({ value: 1, faceUp: false });
+    expect(gridOf(s, other)[11]).toEqual({ value: 12, faceUp: false });
+    // Et l'événement, qui part à tous les écrans, n'en dit rien : personne ne
+    // sait ce qui vient de traverser la table, pas même le voleur.
+    expect(s.lastEvents).toContainEqual({
+      type: 'stole',
+      playerId: id,
+      index: 11,
+      taken: null,
+      targetPlayerId: other,
+      targetIndex: 11,
+      given: null,
+    });
+  });
+
+  it('fait voyager la face avec la carte, et déplace donc les dos', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    const other = opponentOf(s, id);
+    setGridWithHidden(s, id, [...CLEAN]);
+    setGridWithHidden(s, other, [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+    const myHidden = gridOf(s, id).filter((c) => c && !c.faceUp).length;
+    s = drawSteal(s, id);
+
+    // Ma carte cachée (11) contre son 12 visible (0).
+    s = play(s, { type: 'steal', playerId: id, index: 11, targetPlayerId: other, targetIndex: 0 });
+
+    // Une carte visible arrive visible : j'ai un dos de moins, elle en a un de plus.
+    expect(gridOf(s, id)[11]).toEqual({ value: 12, faceUp: true });
+    expect(gridOf(s, other)[0]).toEqual({ value: 12, faceUp: false });
+    expect(gridOf(s, id).filter((c) => c && !c.faceUp).length).toBe(myHidden - 1);
+    // L'annonce ne dit que ce que la table montrait : sa carte était visible,
+    // la mienne ne l'était pas.
+    expect(s.lastEvents).toContainEqual({
+      type: 'stole',
+      playerId: id,
+      index: 11,
+      taken: 12,
+      targetPlayerId: other,
+      targetIndex: 0,
+      given: null,
+    });
+  });
+
+  it('ferme la manche quand le voleur donne son dernier dos', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    const other = opponentOf(s, id);
+    setGridWithHidden(s, id, [...CLEAN]);
+    setGridWithHidden(s, other, [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+    s = drawSteal(s, id);
+
+    s = play(s, { type: 'steal', playerId: id, index: 11, targetPlayerId: other, targetIndex: 0 });
+
+    // Plus un seul dos chez moi : l'échange ferme la manche comme l'aurait fait
+    // n'importe quel autre coup.
+    expect(s.roundCloserId).toBe(id);
   });
 
   it('refuse de se voler soi-même et de viser un inconnu', () => {
@@ -923,18 +975,20 @@ describe('la carte Vol', () => {
     expect(s.roundCloserId).toBe(id);
   });
 
-  it('ne propose plus l’échange quand personne n’a de carte visible', () => {
+  it('ne propose plus l’échange quand une grille n’a plus une seule carte', () => {
     let s = startedSpicy(2);
     const id = s.players[s.currentPlayerIndex].id;
     const other = opponentOf(s, id);
     setGridWithHidden(s, id, [...CLEAN]);
-    setGrid(s, other, [...CLEAN], false);
+    // Tout est parti en éliminations : il n'y a plus rien à échanger, dos
+    // compris.
+    setGrid(s, other, Array.from({ length: GRID_SIZE }, () => null));
     s = drawSteal(s, id);
 
     expect(legalActionsFor(s, id)).toEqual(['declineSteal']);
     expect(
       expectFail(s, { type: 'steal', playerId: id, index: 0, targetPlayerId: other, targetIndex: 0 }),
-    ).toMatch(/face visible/);
+    ).toMatch(/Case invalide/);
   });
 });
 
@@ -974,8 +1028,41 @@ describe('le joker', () => {
       cells: columnIndices(1),
       jokers: [5],
     });
-    // Il repart à la défausse en joker : il continue de circuler.
-    expect(countCard(s.discardPile, JOKER_CARD)).toBe(1);
+    // Il ne se pose pas sur la défausse, où le joueur suivant n'aurait qu'à se
+    // servir : il retourne dans la pioche.
+    expect(countCard(s.discardPile, JOKER_CARD)).toBe(0);
+    expect(countCard(s.drawPile, JOKER_CARD)).toBe(1);
+  });
+
+  it('rentre dans la pioche, pas sur la défausse, quand il ferme un groupe', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    setGrid(s, id, [1, 7, 4, 6, 2, JOKER_CARD, 5, 10, 3, 9, 11, 8]);
+    s.discardPile.push(7);
+    const pileBefore = s.drawPile.length;
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 9 });
+
+    // Le joueur suivant ne peut pas le ramasser : ce n'est pas lui qui est sur
+    // le dessus de la défausse, et la pioche a une carte de plus.
+    expect(s.discardPile.at(-1)).not.toBe(JOKER_CARD);
+    expect(s.drawPile).toHaveLength(pileBefore + 1);
+    // Mélangé dedans, pas enfoui dessous : il peut ressortir dans la manche.
+    expect(countCard(s.drawPile, JOKER_CARD)).toBe(1);
+  });
+
+  it('repart à la défausse comme les autres quand on le recouvre', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    setGridWithHidden(s, id, [JOKER_CARD, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]);
+    s.discardPile.push(2);
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 0 });
+
+    // Poser dessus est un choix, pas une élimination : là, le joker se ramasse.
+    expect(s.discardPile.at(-1)).toBe(JOKER_CARD);
   });
 
   it('ne complète pas une colonne dépareillée', () => {
@@ -1034,7 +1121,9 @@ describe('le joker', () => {
     expect(groups).toHaveLength(2);
     // Le joker est signalé dans les deux : c'est lui qui a fermé l'une et l'autre.
     for (const g of groups) expect(g).toMatchObject({ jokers: [5] });
-    // Une seule carte part à la défausse par case vidée, pas deux pour le joker.
-    expect(countCard(s.discardPile, JOKER_CARD)).toBe(1);
+    // Une case n'a beau fermer qu'un seul joker, elle appartient aux deux
+    // groupes : c'est une carte qui rentre dans la pioche, pas deux.
+    expect(countCard(s.discardPile, JOKER_CARD)).toBe(0);
+    expect(countCard(s.drawPile, JOKER_CARD)).toBe(1);
   });
 });

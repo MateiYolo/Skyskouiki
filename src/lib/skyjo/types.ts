@@ -132,6 +132,9 @@ export type GameEvent =
        * *lesquelles* et *pourquoi* : afficher la valeur du groupe sur le joker
        * lui ferait raconter que la colonne était faite de trois 7, alors que
        * c'est précisément le joker qui l'a fermée.
+       *
+       * Elles disent aussi où la carte s'en va : le joker retourne dans la
+       * pioche quand les autres tombent à la défausse.
        */
       jokers: number[];
     }
@@ -143,13 +146,19 @@ export type GameEvent =
       playerId: string;
       /** Case du voleur : elle contient désormais `taken`. */
       index: number;
-      /** La carte prise à la victime. */
-      taken: ValueCard;
+      /**
+       * La carte prise à la victime, ou `null` si elle était face cachée.
+       *
+       * L'événement part à tous les écrans : une carte qui traverse la table
+       * sans être retournée ne doit rien révéler, pas même à celui qui vient de
+       * la voler.
+       */
+      taken: ValueCard | null;
       targetPlayerId: string;
       /** Case de la victime : elle contient désormais `given`. */
       targetIndex: number;
-      /** La carte laissée en échange. */
-      given: ValueCard;
+      /** La carte laissée en échange, ou `null` si elle était face cachée. */
+      given: ValueCard | null;
     }
   | { type: 'stealDeclined'; playerId: string }
   | { type: 'lastTurnTriggered'; playerId: string }

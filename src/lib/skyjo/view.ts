@@ -166,16 +166,17 @@ export function toView(state: GameState, viewerId: string, since?: number): Game
 }
 
 /**
- * Vrai si un échange est jouable : une carte visible chez moi, une chez un
- * adversaire.
+ * Vrai si un échange est jouable : une carte chez moi, une chez un adversaire —
+ * face visible ou non, l'échange ne regarde pas la face.
  *
- * Le cas contraire n'est pas qu'une précaution : deux cartes retournées en
- * début de manche peuvent toutes les deux partir avec une colonne éliminée, et
- * on se retrouve alors avec un Vol en main et personne à voler.
+ * Le cas contraire n'est pas qu'une précaution : une grille entièrement vidée
+ * par ses éliminations n'a plus rien à échanger, et on se retrouve alors avec
+ * un Vol en main et personne à voler.
  */
 function canSteal(state: GameState, me: Player): boolean {
-  if (countFaceUp(me.grid) === 0) return false;
-  return state.players.some((p) => p.id !== me.id && countFaceUp(p.grid) > 0);
+  const holdsCard = (p: Player) => p.grid.some((cell) => cell !== null);
+  if (!holdsCard(me)) return false;
+  return state.players.some((p) => p.id !== me.id && holdsCard(p));
 }
 
 export function legalActionsFor(state: GameState, viewerId: string): LegalAction[] {

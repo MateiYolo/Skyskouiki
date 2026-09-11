@@ -1,5 +1,5 @@
 import { cardName } from './rules';
-import type { GameEvent } from './types';
+import type { GameEvent, ValueCard } from './types';
 import type { GameView } from './view';
 
 /**
@@ -17,6 +17,11 @@ export interface LastMove {
   text: string;
 }
 
+/** Le nom d'une carte échangée par un Vol, face cachée comprise. */
+function stolenName(card: ValueCard | null): string {
+  return card === null ? 'une carte cachée' : cardName(card);
+}
+
 function describe(event: GameEvent): string | null {
   switch (event.type) {
     case 'drew':
@@ -30,7 +35,9 @@ function describe(event: GameEvent): string | null {
     case 'stealDrawn':
       return 'pioche un Vol';
     case 'stole':
-      return `vole ${cardName(event.taken)}, laisse ${cardName(event.given)}`;
+      // Une carte jamais retournée n'a pas de nom : elle a traversé la table
+      // sans que personne — le voleur compris — ne sache ce qu'elle valait.
+      return `vole ${stolenName(event.taken)}, laisse ${stolenName(event.given)}`;
     case 'stealDeclined':
       return 'renonce au Vol';
     default:

@@ -11,7 +11,7 @@ import {
   type FlightRequest,
 } from './flights';
 import { CLEAR_STAGGER, FLIGHT_DURATION, FLIGHT_NEXT } from './motion';
-import type { GameEvent, GameView, ViewCell } from '@/lib/skyjo';
+import { JOKER_CARD, type GameEvent, type GameView, type ViewCell } from '@/lib/skyjo';
 
 /**
  * Ce qui se teste ici, c'est la **chronologie** d'un coup.
@@ -193,6 +193,52 @@ describe('flightsForEvents', () => {
       { from: theirs, to: theirs, value: -2, delay: 0, hold: FLIGHT_NEXT },
     ]);
     for (const mask of masks) expect(mask.hold).toBe(flying[0].delay);
+  });
+
+  it('fait voyager sur son dos une carte volée face cachée', () => {
+    const mine = cellAnchor(ME, 2);
+    const theirs = cellAnchor(THEM, 7);
+    const view = makeView({
+      lastEvents: [
+        {
+          type: 'stole',
+          playerId: ME,
+          index: 2,
+          // Deux dos qui se croisent : le serveur n'annonce ni l'une ni l'autre.
+          taken: null,
+          targetPlayerId: THEM,
+          targetIndex: 7,
+          given: null,
+        },
+      ],
+    });
+
+    // Le trajet n'en dit pas plus que la table : deux cartes changent de grille
+    // sans se retourner.
+    expect(moving(flightsForEvents(view))).toEqual([
+      { from: mine, to: theirs, value: null, delay: FLIGHT_NEXT },
+      { from: theirs, to: mine, value: null, delay: FLIGHT_NEXT },
+    ]);
+  });
+
+  it('renvoie le joker d’un groupe éliminé vers la pioche, pas vers la défausse', () => {
+    const view = makeView({
+      discardTop: 7,
+      lastEvents: [placed(THEM, 9), cleared(THEM, [1, 5, 9], 'column', [5])],
+    });
+    const flying = moving(flightsForEvents(view));
+
+    const joker = flying.find((f) => f.from === cellAnchor(THEM, 5))!;
+    // Le voir se poser sur la défausse ferait croire qu'on peut le reprendre au
+    // coup suivant : c'est précisément ce que la règle lui interdit.
+    expect(joker.to).toBe(DRAW_PILE);
+    expect(joker.value).toBe(JOKER_CARD);
+    // Les deux autres cartes du groupe, elles, partent bien à la défausse.
+    for (const i of [1, 9]) {
+      expect(flying.find((f) => f.from === cellAnchor(THEM, i))!.to).toBe(DISCARD_PILE);
+    }
+    // Et rien ne le recouvre sur une pile où il ne se pose jamais.
+    expect(covers(flightsForEvents(view)).every((c) => c.value !== JOKER_CARD)).toBe(true);
   });
 
   it('laisse le vol se poser avant de vider la colonne qu’il vient de fermer', () => {
