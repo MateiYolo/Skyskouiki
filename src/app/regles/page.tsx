@@ -1,22 +1,32 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { PlayingCard } from '@/components/PlayingCard';
+import { JOKER_CARD, STEAL_CARD } from '@/lib/skyjo';
 
 export const metadata: Metadata = {
   title: 'Règles · Skouikjo',
-  description: 'Les règles officielles du Skyjo, en français, plus deux règles maison.',
+  description:
+    'Les règles officielles du Skyjo, en français, plus deux règles maison et le mode spicy.',
 };
 
 function Section({
   n,
   title,
   house,
+  spicy,
   children,
 }: {
   n: string;
   title: string;
   /** Signale une règle qui n'existe pas dans le jeu original. */
   house?: boolean;
+  /**
+   * Signale une règle qui ne s'applique qu'au mode spicy.
+   *
+   * Distinct d'une règle maison, et la distinction compte : une règle maison est
+   * toujours là, une règle spicy dépend d'un interrupteur dans le salon.
+   */
+  spicy?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -27,6 +37,11 @@ function Section({
         {house && (
           <span className="rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-accent">
             règle maison
+          </span>
+        )}
+        {spicy && (
+          <span className="rounded-full border border-steal/50 bg-steal/15 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-steal">
+            mode spicy
           </span>
         )}
       </h2>
@@ -49,7 +64,8 @@ export default function RulesPage() {
       <h1 className="text-3xl font-black tracking-tight">Les règles</h1>
       <p className="mt-2 text-sm text-ink-dim">
         Celles du jeu original, plus deux règles maison — signalées là où elles s’appliquent. But
-        du jeu&nbsp;: avoir le plus petit total.
+        du jeu&nbsp;: avoir le plus petit total. Les trois dernières sections ne valent que pour le{' '}
+        <Key>mode spicy</Key>, qui se choisit dans le salon avant de lancer la partie.
       </p>
 
       <Section n="01" title="Le matériel">
@@ -183,8 +199,68 @@ export default function RulesPage() {
         </p>
       </Section>
 
+      <Section n="11" title="Le mode spicy" spicy>
+        <p>
+          Trois cartes en plus dans le paquet, et rien d’autre&nbsp;: le tour de jeu, les colonnes,
+          les lignes, le comptage et la pénalité de fermeture ne changent pas d’une virgule. L’hôte
+          le choisit <Key>dans le salon</Key>, avant de distribuer&nbsp;; ensuite c’est figé pour
+          toute la partie.
+        </p>
+        <div className="flex gap-2 pt-1">
+          {([-5, JOKER_CARD, STEAL_CARD] as const).map((card) => (
+            <div key={String(card)} className="w-11">
+              <PlayingCard value={card} faceUp size="sm" />
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section n="12" title="Le -5 et le joker" spicy>
+        <p>
+          <Key>Deux -5</Key> rejoignent le paquet. Rien de plus qu’une carte&nbsp;: elle se pose, se
+          vole et part à la défausse comme les autres. Il n’y en a que deux, donc une colonne de -5
+          est impossible — c’est du point sec, dix-sept d’écart avec un 12.
+        </p>
+        <p>
+          <Key>Un joker</Key>, un seul. Il vaut <Key>0</Key>, et il complète{' '}
+          <Key>n’importe quel groupe</Key>&nbsp;: une colonne <Key>7 / joker / 7</Key> saute comme
+          une colonne de trois 7. Il peut fermer une colonne et une ligne du même coup, et il repart
+          à la défausse en joker — quelqu’un d’autre le récupérera.
+        </p>
+        <p>
+          Attention&nbsp;: dès qu’on <Key>pose une carte dessus</Key>, il s’en va et la case
+          redevient ordinaire. Et trois jokers ne feraient pas un groupe&nbsp;— il n’y aurait aucune
+          valeur sur laquelle s’accorder. C’est aussi pour ça qu’il n’y en a qu’un.
+        </p>
+      </Section>
+
+      <Section n="13" title="La carte Vol" spicy>
+        <p>
+          <Key>Quatre cartes Vol</Key> sont glissées dans la pioche — et seulement là. Elles ne
+          peuvent donc pas dormir dans une grille&nbsp;: un Vol ne se déclenche que si{' '}
+          <Key>quelqu’un pioche</Key>. Compte environ un par manche.
+        </p>
+        <p>
+          Quand tu en pioches une, tu ne la prends pas en main&nbsp;: tu <Key>échanges une de tes
+          cartes face visible contre celle d’un adversaire</Key>, face visible aussi. Les deux côtés
+          sont donc connus de tout le monde avant que tu ne choisisses&nbsp;— pas de vol à
+          l’aveugle.
+        </p>
+        <p>
+          Et les <Key>deux grilles</Key> rejouent leurs éliminations. Tu peux prendre la carte qui
+          ferme ta colonne&nbsp;; tu peux aussi, sans le vouloir, laisser à ta victime celle qui
+          ferme la sienne. Regarde sa grille avant de donner.
+        </p>
+        <p>
+          Tu peux <Key>renoncer</Key>. Ça coûte un retournement, exactement comme si tu avais jeté
+          une carte piochée&nbsp;: sans ce prix, refuser serait toujours le bon coup. Puis la carte
+          quitte la manche.
+        </p>
+      </Section>
+
       <p className="border-t border-white/10 pt-6 text-xs leading-relaxed text-ink-faint">
-        Skyjo est un jeu de Magilano. Skouikjo est une implémentation personnelle de ses règles,
+        Le mode spicy n’a rien d’officiel non plus&nbsp;: ces trois cartes n’existent pas dans la
+        boîte. Skyjo est un jeu de Magilano. Skouikjo est une implémentation personnelle de ses règles,
         sans lien avec l’éditeur, faite pour jouer à deux sur nos téléphones.
       </p>
 

@@ -27,6 +27,7 @@ function makeView(patch: Partial<GameView> = {}): GameView {
     version: 7,
     phase: 'playing',
     round: 1,
+    variant: 'classic',
     targetScore: 100,
     hostId: ME,
     players: [

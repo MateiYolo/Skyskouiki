@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { PlayingCard } from './PlayingCard';
 import { DISCARD_PILE, DRAW_PILE, HAND } from '@/lib/client/flights';
 import { FLIGHT_DURATION, MOVE, SETTLE } from '@/lib/client/motion';
+import { STEAL_CARD, type PileCard, type ValueCard } from '@/lib/skyjo';
 
 /**
  * Le milieu de la table : la consigne, les deux piles, et la carte en main.
@@ -47,10 +48,19 @@ export interface TableCenterProps {
   /** Non nul dès qu'un joueur a fermé la manche. */
   lastTurn: LastTurn | null;
   drawPileCount: number;
-  discardTop: number | null;
+  discardTop: ValueCard | null;
   /** Déjà filtrée par le serveur : `null` quand le porteur seul a le droit de la voir. */
-  heldCard: number | null;
+  heldCard: ValueCard | null;
   heldFrom: 'draw' | 'discard' | null;
+  /**
+   * Un Vol est en jeu : son porteur choisit son échange.
+   *
+   * Le moteur ne le met pas « en main » — un Vol n'a pas de valeur à tenir —
+   * mais l'emplacement du milieu est exactement là que ça se joue, et laisser
+   * le créneau vide pendant qu'on choisit sa cible donnerait l'impression que
+   * la pioche n'a rien donné.
+   */
+  stealing: boolean;
   /** Ce que fait l'adversaire quand c'est lui qui tient la carte. */
   heldNote: string | null;
   /** À qui est la carte posée au milieu. */
@@ -62,9 +72,12 @@ export interface TableCenterProps {
   canDraw: boolean;
   canTakeDiscard: boolean;
   canDiscardHeld: boolean;
+  /** C'est à moi de résoudre un Vol : je peux y renoncer, au prix d'un retournement. */
+  canDecline: boolean;
   onDraw: () => void;
   onTakeDiscard: () => void;
   onDiscardHeld: () => void;
+  onDecline: () => void;
 }
 
 /**
@@ -109,6 +122,7 @@ export const TableCenter = memo(function TableCenter({
   discardTop,
   heldCard,
   heldFrom,
+  stealing,
   heldNote,
   holder,
   drewFrom,
@@ -116,11 +130,13 @@ export const TableCenter = memo(function TableCenter({
   canDraw,
   canTakeDiscard,
   canDiscardHeld,
+  canDecline,
   onDraw,
   onTakeDiscard,
   onDiscardHeld,
+  onDecline,
 }: TableCenterProps) {
-  const holding = heldFrom !== null;
+  const holding = heldFrom !== null || stealing;
   /**
    * Jeter, c'est poser la carte sur la défausse — alors on rend la défausse
    * elle-même touchable. C'est le geste de la vraie table, et la cible fait la
@@ -132,7 +148,20 @@ export const TableCenter = memo(function TableCenter({
   // elle qui explique pourquoi l'adversaire pose ici plutôt que là. Elle reste
   // face cachée le temps d'un aller-retour quand c'est moi qui viens de
   // piocher — le serveur ne me l'a pas encore dite.
-  const heldVisible = heldCard !== null;
+  const heldVisible = stealing || heldCard !== null;
+  /**
+   * Pendant un Vol, les deux piles se taisent.
+   *
+   * Ni l'une ni l'autre n'est jouable à cet instant, et « Renoncer » est un mot
+   * plus large que l'emplacement de la carte en main : le bouton passait
+   * par-dessus « pioche » et « défausse ». Les faire taire ne cache aucune
+   * information — elles sont déjà grisées — et dit ce qui est vrai : la
+   * décision ne se joue pas là.
+   */
+  const quietPiles = stealing;
+  // Le Vol occupe le créneau de la carte en main : c'est la même place dans le
+  // tour, et la même question — qu'est-ce que celui qui l'a pioché va en faire.
+  const heldShown: PileCard | null = stealing ? STEAL_CARD : heldCard;
 
   return (
     // Un bandeau bordé sur ses deux faces : le terrain commun se voit, et on
@@ -197,7 +226,7 @@ export const TableCenter = memo(function TableCenter({
             />
             {drewFrom === 'draw' && <TakenFlash key={echoKey} />}
           </div>
-          <PileLabel>pioche</PileLabel>
+          <PileLabel>{quietPiles ? ' ' : 'pioche'}</PileLabel>
         </div>
 
         {/* Carte en main : emplacement toujours présent, rempli ou non. Il
@@ -230,10 +259,16 @@ export const TableCenter = memo(function TableCenter({
                   style={{ filter: 'drop-shadow(0 8px 20px rgb(0 0 0 / 0.6))' }}
                 >
                   <PlayingCard
-                    value={heldCard}
+                    value={heldShown}
                     faceUp={heldVisible}
                     size="lg"
-                    aria-label={heldVisible ? `Carte en main : ${heldCard}` : 'Carte en main, face cachée'}
+                    aria-label={
+                      stealing
+                        ? 'Carte Vol : échange une carte visible avec un adversaire'
+                        : heldVisible
+                          ? `Carte en main : ${heldCard}`
+                          : 'Carte en main, face cachée'
+                    }
                   />
                 </motion.div>
               ) : (
@@ -256,6 +291,16 @@ export const TableCenter = memo(function TableCenter({
                 className="rounded-full border border-white/25 bg-white/12 px-3.5 py-1 text-[0.66rem] font-bold uppercase tracking-wide text-ink active:scale-95"
               >
                 Jeter
+              </button>
+            ) : canDecline ? (
+              // Renoncer coûte un retournement : le bouton le dit, sinon le
+              // joueur découvre le prix après avoir appuyé.
+              <button
+                type="button"
+                onClick={onDecline}
+                className="rounded-full border border-white/25 bg-white/12 px-3.5 py-1 text-[0.66rem] font-bold uppercase tracking-wide text-ink active:scale-95"
+              >
+                Renoncer
               </button>
             ) : holder && !holder.isMe ? (
               <span className="flex max-w-full items-center gap-1 whitespace-nowrap text-[0.62rem] font-bold text-accent">
@@ -305,7 +350,9 @@ export const TableCenter = memo(function TableCenter({
             )}
             {drewFrom === 'discard' && <TakenFlash key={echoKey} />}
           </div>
-          <PileLabel accent={throwHere}>{throwHere ? 'jeter ici' : 'défausse'}</PileLabel>
+          <PileLabel accent={throwHere}>
+            {quietPiles ? ' ' : throwHere ? 'jeter ici' : 'défausse'}
+          </PileLabel>
         </div>
       </div>
     </div>

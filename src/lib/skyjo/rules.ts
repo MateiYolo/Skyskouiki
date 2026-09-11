@@ -1,4 +1,18 @@
-import { COLS, GRID_SIZE, ROWS, type Cell, type GroupKind } from './types';
+import {
+  COLS,
+  GRID_SIZE,
+  JOKER_CARD,
+  JOKER_VALUE,
+  ROWS,
+  STEAL_CARD,
+  isJokerCard,
+  isStealCard,
+  type Cell,
+  type GroupKind,
+  type PileCard,
+  type ValueCard,
+  type Variant,
+} from './types';
 
 /**
  * Composition officielle du jeu Skyjo : 150 cartes.
@@ -22,18 +36,131 @@ export const DECK_COMPOSITION: ReadonlyArray<readonly [value: number, count: num
   [12, 10],
 ];
 
+/**
+ * Ce que le mode spicy ajoute au paquet : deux -5.
+ *
+ * Deux, et pas trois : à trois exemplaires une colonne de -5 devient possible,
+ * ce qui cumulerait le plus gros gain de points du jeu et une élimination
+ * gratuite. À deux, la carte reste du point sec — dix-sept points d'écart avec
+ * un 12, et rien d'autre. Un seul exemplaire, lui, ne sortirait qu'une manche
+ * sur quatre à deux joueurs : trop rare pour qu'on joue avec.
+ */
+export const SPICY_COMPOSITION: ReadonlyArray<readonly [value: number, count: number]> = [
+  [-5, 2],
+];
+
+/**
+ * Nombre de cartes Vol glissées dans la pioche en mode spicy.
+ *
+ * Quatre, parce qu'un Vol ne se déclenche qu'en étant *pioché* (cf.
+ * `seedStealCards`) : ça fait environ un demi Vol par manche à deux joueurs et
+ * un peu plus d'un à quatre. Deux cartes ne sortiraient quasiment jamais, huit
+ * feraient de l'échange le jeu principal.
+ */
+export const STEAL_COUNT = 4;
+
+/**
+ * Nombre de jokers du mode spicy.
+ *
+ * Un seul, et ce n'est pas qu'une question de dosage : à deux exemplaires, une
+ * colonne `joker / joker / 7` poserait la question de ce qu'elle vaut, et deux
+ * jokers côte à côte n'auraient plus rien à compléter. À un, la règle se dit en
+ * une phrase.
+ */
+export const JOKER_COUNT = 1;
+
 export const DECK_SIZE = 150;
+export const SPICY_DECK_SIZE =
+  DECK_SIZE + SPICY_COMPOSITION.reduce((n, [, c]) => n + c, 0) + JOKER_COUNT;
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;
 export const INITIAL_FLIPS = 2;
 export const DEFAULT_TARGET_SCORE = 100;
 
-export function buildDeck(): number[] {
-  const deck: number[] = [];
-  for (const [value, count] of DECK_COMPOSITION) {
+/** Les cartes à valeur du paquet : celles qui peuvent atterrir dans une grille. */
+export function buildDeck(variant: Variant = 'classic'): ValueCard[] {
+  const spicy = variant === 'spicy';
+  const composition = spicy ? [...DECK_COMPOSITION, ...SPICY_COMPOSITION] : DECK_COMPOSITION;
+  const deck: ValueCard[] = [];
+  for (const [value, count] of composition) {
     for (let i = 0; i < count; i++) deck.push(value);
   }
+  if (spicy) for (let i = 0; i < JOKER_COUNT; i++) deck.push(JOKER_CARD);
   return deck;
+}
+
+/**
+ * Comment une carte se nomme dans une phrase.
+ *
+ * Les annonces du jeu interpolaient la valeur directement (« pose 4, jette
+ * 12 ») : avec le joker, ça donnait « pose joker », et avec un Vol, un nom de
+ * code anglais au milieu d'une phrase française.
+ */
+export function cardName(card: PileCard): string {
+  if (isJokerCard(card)) return 'le joker';
+  if (isStealCard(card)) return 'un Vol';
+  return String(card);
+}
+
+/**
+ * Les deux seules traductions entre une carte de pile et une case de grille.
+ *
+ * Tout le reste du moteur travaille sur des cases dont la valeur est un nombre
+ * (cf. `Cell`) : ces deux fonctions sont la frontière, et le joker n'existe
+ * comme carte à part qu'en dehors d'elles.
+ */
+export function cardToCell(card: ValueCard, faceUp = false): NonNullable<Cell> {
+  return isJokerCard(card)
+    ? { value: JOKER_VALUE, faceUp, joker: true }
+    : { value: card, faceUp };
+}
+
+/**
+ * La carte que contient cette case, telle qu'elle repart dans une pile.
+ *
+ * Le paramètre est volontairement structurel : une case de la vue (`ViewCell`)
+ * porte les deux mêmes champs, et l'affichage a besoin exactement de cette
+ * traduction pour dessiner un joker au lieu d'un 0.
+ */
+export function cellToCard(cell: { value: number; joker?: true }): ValueCard {
+  return cell.joker ? JOKER_CARD : cell.value;
+}
+
+/**
+ * Remplace la carte d'une case, sur place.
+ *
+ * Le drapeau de joker doit se *retirer* autant que se poser : une case qui
+ * portait le joker et reçoit un 7 continuerait sinon à compléter les colonnes.
+ * D'où ce passage obligé, plutôt qu'une affectation à la main de `value` à
+ * chaque endroit où une case change de carte.
+ */
+export function setCellCard(cell: NonNullable<Cell>, card: ValueCard, faceUp = true): void {
+  const next = cardToCell(card, faceUp);
+  cell.value = next.value;
+  cell.faceUp = next.faceUp;
+  if (next.joker) cell.joker = true;
+  else delete cell.joker;
+}
+
+/**
+ * Glisse les cartes Vol dans la pioche, une fois les grilles distribuées.
+ *
+ * Une carte Vol ne porte pas de valeur : elle n'a donc pas de place dans une
+ * grille, et c'est ce qui permet de l'ajouter sans toucher au comptage ni aux
+ * éliminations. La conséquence est une règle de jeu à part entière, pas un
+ * détail d'implémentation — **un Vol ne se déclenche que si quelqu'un pioche**,
+ * jamais en étant distribué. C'est ce qui fixe sa fréquence, et donc son
+ * dosage (cf. `STEAL_COUNT`).
+ */
+export function seedStealCards(
+  pile: readonly ValueCard[],
+  count: number,
+  seed: number,
+): { pile: PileCard[]; seed: number } {
+  const mixed: PileCard[] = [...pile];
+  for (let i = 0; i < count; i++) mixed.push(STEAL_CARD);
+  const { items, seed: next } = shuffle(mixed, seed);
+  return { pile: items, seed: next };
 }
 
 /** PRNG déterministe (mulberry32) : même graine = même partie, donc tests reproductibles. */
@@ -107,19 +234,28 @@ export const MIN_GROUP = 3;
  * Une case déjà vidée par une élimination précédente ne bloque pas : elle n'est
  * plus là, elle ne peut pas dépareiller. Ce qui reste doit être face visible,
  * de même valeur, et assez nombreux (`MIN_GROUP`).
+ *
+ * Le joker, lui, compte dans le groupe sans rien imposer : il prend la valeur
+ * des autres. Il en faut donc au moins une autre — un groupe qui ne serait fait
+ * que de jokers n'aurait aucune valeur sur laquelle s'accorder, et « trois
+ * cartes identiques » ne voudrait plus rien dire. C'est aussi pourquoi le
+ * paquet n'en contient qu'un (cf. `JOKER_COUNT`).
  */
 function uniformValue(grid: readonly Cell[], indices: readonly number[]): number | null {
   let value: number | null = null;
   let count = 0;
+  let numbered = 0;
   for (const i of indices) {
     const cell = grid[i];
     if (cell === null) continue;
     if (!cell.faceUp) return null;
-    if (count > 0 && cell.value !== value) return null;
-    value = cell.value;
     count++;
+    if (cell.joker) continue;
+    if (numbered > 0 && cell.value !== value) return null;
+    value = cell.value;
+    numbered++;
   }
-  return count >= MIN_GROUP ? value : null;
+  return count >= MIN_GROUP && numbered > 0 ? value : null;
 }
 
 export interface ClearedGroup {
@@ -134,6 +270,8 @@ export interface ClearedGroup {
    * feraient apparaître une carte fantôme sur le trou.
    */
   cells: number[];
+  /** Celles de ces cases qui portaient le joker. */
+  jokers: number[];
 }
 
 /**
@@ -147,20 +285,22 @@ export interface ClearedGroup {
  *
  * Mute `grid` et `discardPile`.
  */
-export function clearGroups(grid: Cell[], discardPile: number[]): ClearedGroup[] {
+export function clearGroups(grid: Cell[], discardPile: ValueCard[]): ClearedGroup[] {
   const found: ClearedGroup[] = [];
 
   const collect = (kind: GroupKind, index: number, indices: number[]) => {
     const value = uniformValue(grid, indices);
     if (value === null) return;
-    found.push({ kind, index, value, cells: indices.filter((i) => grid[i] !== null) });
+    const cells = indices.filter((i) => grid[i] !== null);
+    found.push({ kind, index, value, cells, jokers: cells.filter((i) => grid[i]!.joker) });
   };
 
   for (let col = 0; col < COLS; col++) collect('column', col, columnIndices(col));
   for (let row = 0; row < ROWS; row++) collect('row', row, rowIndices(row));
 
   for (const i of new Set(found.flatMap((group) => group.cells))) {
-    discardPile.push(grid[i]!.value);
+    // Le joker repart à la défausse en joker : il continue de circuler.
+    discardPile.push(cellToCard(grid[i]!));
     grid[i] = null;
   }
 

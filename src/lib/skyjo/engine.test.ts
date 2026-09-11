@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, createGame } from './engine';
-import { DECK_COMPOSITION, DECK_SIZE, buildDeck, columnIndices, rowIndices, shuffle } from './rules';
-import { toView } from './view';
-import type { Action, Cell, GameState } from './types';
+import {
+  DECK_COMPOSITION,
+  DECK_SIZE,
+  JOKER_COUNT,
+  SPICY_COMPOSITION,
+  SPICY_DECK_SIZE,
+  STEAL_COUNT,
+  buildDeck,
+  cardToCell,
+  columnIndices,
+  gridSum,
+  rowIndices,
+  shuffle,
+} from './rules';
+import { legalActionsFor, toView } from './view';
+import { JOKER_CARD, STEAL_CARD } from './types';
+import type { Action, Cell, GameState, PileCard, ValueCard } from './types';
 
 // --- utilitaires de test ----------------------------------------------------
 
@@ -43,9 +57,20 @@ function started(playerCount = 2, seed = 42): GameState {
 }
 
 /** Force la grille d'un joueur. `values[i] === null` => case vide (colonne éliminée). */
-function setGrid(s: GameState, playerId: string, values: Array<number | null>, faceUp = true) {
+function setGrid(s: GameState, playerId: string, values: Array<ValueCard | null>, faceUp = true) {
   const p = s.players.find((x) => x.id === playerId)!;
-  p.grid = values.map<Cell>((v) => (v === null ? null : { value: v, faceUp }));
+  p.grid = values.map<Cell>((v) => (v === null ? null : cardToCell(v, faceUp)));
+}
+
+/** Les cartes à valeur d'une pile : en mode classique, elles y sont toutes. */
+function values(pile: readonly PileCard[]): ValueCard[] {
+  return pile.filter((c): c is ValueCard => c !== STEAL_CARD);
+}
+
+/** Deux paquets contiennent-ils les mêmes cartes, ordre mis à part ? */
+function sameCards(a: readonly PileCard[], b: readonly PileCard[]) {
+  const key = (d: readonly PileCard[]) => d.map(String).sort().join(',');
+  return key(a) === key(b);
 }
 
 /** Joue un tour « neutre » : prend la défausse et la place sur la case `index`. */
@@ -64,7 +89,7 @@ describe('composition du jeu', () => {
 
   it('respecte la répartition officielle -2×5, -1×10, 0×15, 1..12×10', () => {
     const deck = buildDeck();
-    const counts = new Map<number, number>();
+    const counts = new Map<ValueCard, number>();
     for (const c of deck) counts.set(c, (counts.get(c) ?? 0) + 1);
     expect(counts.get(-2)).toBe(5);
     expect(counts.get(-1)).toBe(10);
@@ -79,7 +104,7 @@ describe('composition du jeu', () => {
     const c = shuffle(buildDeck(), 8).items;
     expect(a).toEqual(b);
     expect(a).not.toEqual(c);
-    expect(a.slice().sort((x, y) => x - y)).toEqual(buildDeck().sort((x, y) => x - y));
+    expect(sameCards(a, buildDeck())).toBe(true);
   });
 });
 
@@ -205,7 +230,7 @@ describe('tour de jeu', () => {
   it('reconstitue la pioche à partir de la défausse quand elle est vide', () => {
     let s = started(2);
     const id = s.players[s.currentPlayerIndex].id;
-    s.discardPile = [...s.drawPile, ...s.discardPile];
+    s.discardPile = [...values(s.drawPile), ...s.discardPile];
     s.drawPile = [];
     const total = s.discardPile.length;
 
@@ -244,6 +269,7 @@ describe('élimination des colonnes (règle officielle)', () => {
       index: 1,
       value: 8,
       cells: columnIndices(1),
+      jokers: [],
     });
   });
 
@@ -295,6 +321,7 @@ describe('élimination des lignes (règle maison)', () => {
       index: 1,
       value: 6,
       cells: rowIndices(1),
+      jokers: [],
     });
   });
 
@@ -335,6 +362,7 @@ describe('élimination des lignes (règle maison)', () => {
       index: 2,
       value: 1,
       cells: [8, 9, 11],
+      jokers: [],
     });
   });
 
@@ -615,5 +643,376 @@ describe('réducteur', () => {
     const next = play(s, { type: 'drawFromPile', playerId: id });
     expect(JSON.stringify(s)).toBe(snapshot);
     expect(next.version).toBe(s.version + 1);
+  });
+});
+
+// ===========================================================================
+// Mode spicy
+// ===========================================================================
+
+/** Un salon en mode spicy, prêt à être lancé. */
+function spicyLobby(playerCount = 2, seed = 42): GameState {
+  return play(lobby(playerCount, seed), {
+    type: 'setVariant',
+    playerId: 'p0',
+    variant: 'spicy',
+  });
+}
+
+/** Une partie spicy lancée, chacun ayant retourné ses deux cartes. */
+function startedSpicy(playerCount = 2, seed = 42): GameState {
+  let s = play(spicyLobby(playerCount, seed), { type: 'startGame', playerId: 'p0' });
+  for (const p of s.players) {
+    s = play(s, { type: 'flipInitial', playerId: p.id, index: 0 });
+    s = play(s, { type: 'flipInitial', playerId: p.id, index: 1 });
+  }
+  return s;
+}
+
+/**
+ * Fixe la grille d'un joueur, une case laissée cachée.
+ *
+ * Sans cette case, la moindre grille de test est « entièrement révélée » : le
+ * tour suivant fermerait la manche, et les assertions porteraient sur une fin
+ * de manche au lieu du coup qu'on voulait vérifier.
+ */
+function setGridWithHidden(
+  s: GameState,
+  playerId: string,
+  cards: Array<ValueCard | null>,
+  hidden = 11,
+) {
+  setGrid(s, playerId, cards);
+  s.players.find((p) => p.id === playerId)!.grid[hidden]!.faceUp = false;
+}
+
+/** Compte les exemplaires d'une carte dans une pile. */
+const countCard = (pile: readonly PileCard[], card: PileCard) =>
+  pile.filter((c) => c === card).length;
+
+const gridOf = (s: GameState, playerId: string) => s.players.find((p) => p.id === playerId)!.grid;
+
+/** Le joueur qui n'est pas `playerId`. */
+const opponentOf = (s: GameState, playerId: string) => s.players.find((p) => p.id !== playerId)!.id;
+
+describe('composition du mode spicy', () => {
+  it('ajoute deux -5 et un joker au paquet officiel', () => {
+    const deck = buildDeck('spicy');
+    expect(deck).toHaveLength(SPICY_DECK_SIZE);
+    expect(countCard(deck, -5)).toBe(2);
+    expect(countCard(deck, JOKER_CARD)).toBe(JOKER_COUNT);
+    expect(SPICY_COMPOSITION.reduce((n, [, c]) => n + c, 0) + JOKER_COUNT).toBe(
+      SPICY_DECK_SIZE - DECK_SIZE,
+    );
+  });
+
+  it('ne touche pas au paquet classique', () => {
+    const deck = buildDeck();
+    expect(countCard(deck, -5)).toBe(0);
+    expect(countCard(deck, JOKER_CARD)).toBe(0);
+  });
+
+  it('ne met les Vol que dans la pioche, jamais dans une grille ni à la défausse', () => {
+    const s = play(spicyLobby(4), { type: 'startGame', playerId: 'p0' });
+    expect(countCard(s.drawPile, STEAL_CARD)).toBe(STEAL_COUNT);
+    expect(countCard(s.discardPile, STEAL_CARD)).toBe(0);
+    // Une grille ne peut pas porter un Vol : une case n'a qu'une valeur.
+    for (const p of s.players) expect(p.grid.every((c) => c !== null)).toBe(true);
+    // Toutes les autres cartes sont là, Vol compris : rien ne s'est perdu.
+    expect(s.drawPile.length + s.discardPile.length + 12 * 4).toBe(
+      SPICY_DECK_SIZE + STEAL_COUNT,
+    );
+  });
+
+  it('garde les deux -5 comme des points secs — jamais une colonne', () => {
+    // Deux exemplaires : il en faudrait trois pour éliminer une colonne.
+    expect(countCard(buildDeck('spicy'), -5)).toBeLessThan(3);
+    const s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    setGrid(s, id, [-5, 1, 2, 3, -5, 4, 5, 6, 7, 8, 9, 10]);
+    expect(gridSum(gridOf(s, id))).toBe(45);
+  });
+});
+
+describe('le choix du mode', () => {
+  it('n’appartient qu’à l’hôte', () => {
+    const s = lobby(2);
+    expect(expectFail(s, { type: 'setVariant', playerId: 'p1', variant: 'spicy' })).toMatch(
+      /hôte/,
+    );
+  });
+
+  it('ne change plus rien une fois la partie lancée', () => {
+    const s = play(spicyLobby(2), { type: 'startGame', playerId: 'p0' });
+    expect(expectFail(s, { type: 'setVariant', playerId: 'p0', variant: 'classic' })).toMatch(
+      /déjà commencé/,
+    );
+  });
+
+  it('se rabat sur le classique pour une partie enregistrée avant le mode spicy', () => {
+    const s = lobby(2);
+    // Ces parties existent en base sans le champ : leur distribution ne doit pas
+    // se mettre à contenir des cartes que personne n'a demandées.
+    delete (s as Partial<GameState>).variant;
+    const dealt = play(s, { type: 'startGame', playerId: 'p0' });
+    expect(countCard(dealt.drawPile, STEAL_CARD)).toBe(0);
+    expect(countCard(dealt.drawPile, JOKER_CARD)).toBe(0);
+  });
+});
+
+describe('la carte Vol', () => {
+  /** Amène le joueur actif à piocher un Vol, la pioche restant fournie. */
+  function drawSteal(s: GameState, playerId: string): GameState {
+    s.drawPile = [1, 2, STEAL_CARD];
+    return play(s, { type: 'drawFromPile', playerId });
+  }
+
+  it('ne se tient pas en main et ne part pas à la défausse', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    const discardBefore = [...s.discardPile];
+
+    s = drawSteal(s, id);
+    expect(s.turnStep).toBe('stealing');
+    expect(s.heldCard).toBeNull();
+    expect(s.heldFrom).toBeNull();
+    expect(s.discardPile).toEqual(discardBefore);
+    expect(s.lastEvents).toContainEqual({ type: 'stealDrawn', playerId: id });
+    // Elle quitte la manche : elle n'est ni en main, ni en grille, ni en pile.
+    expect(countCard(s.drawPile, STEAL_CARD)).toBe(0);
+  });
+
+  it('échange deux cartes visibles sans changer le nombre de cartes cachées', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    const other = opponentOf(s, id);
+    setGridWithHidden(s, id, [...CLEAN]);
+    setGridWithHidden(s, other, [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+    const hiddenBefore = gridOf(s, other).filter((c) => c && !c.faceUp).length;
+
+    s = drawSteal(s, id);
+    s = play(s, { type: 'steal', playerId: id, index: 0, targetPlayerId: other, targetIndex: 0 });
+
+    expect(gridOf(s, id)[0]).toEqual({ value: 12, faceUp: true });
+    expect(gridOf(s, other)[0]).toEqual({ value: 1, faceUp: true });
+    expect(gridOf(s, other).filter((c) => c && !c.faceUp).length).toBe(hiddenBefore);
+    expect(s.lastEvents).toContainEqual({
+      type: 'stole',
+      playerId: id,
+      index: 0,
+      taken: 12,
+      targetPlayerId: other,
+      targetIndex: 0,
+      given: 1,
+    });
+    // Le tour est joué : on passe à l'adversaire.
+    expect(s.players[s.currentPlayerIndex].id).toBe(other);
+  });
+
+  it('refuse une carte face cachée, des deux côtés', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    const other = opponentOf(s, id);
+    setGridWithHidden(s, id, [...CLEAN]);
+    setGridWithHidden(s, other, [...CLEAN]);
+    s = drawSteal(s, id);
+
+    // Sa carte cachée (index 11).
+    expect(
+      expectFail(s, { type: 'steal', playerId: id, index: 0, targetPlayerId: other, targetIndex: 11 }),
+    ).toMatch(/face visible/);
+    // La mienne.
+    expect(
+      expectFail(s, { type: 'steal', playerId: id, index: 11, targetPlayerId: other, targetIndex: 0 }),
+    ).toMatch(/face visible/);
+  });
+
+  it('refuse de se voler soi-même et de viser un inconnu', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    setGridWithHidden(s, id, [...CLEAN]);
+    s = drawSteal(s, id);
+
+    expect(
+      expectFail(s, { type: 'steal', playerId: id, index: 0, targetPlayerId: id, targetIndex: 1 }),
+    ).toMatch(/adversaire/);
+    expect(
+      expectFail(s, { type: 'steal', playerId: id, index: 0, targetPlayerId: 'fantôme', targetIndex: 1 }),
+    ).toMatch(/inconnu/);
+  });
+
+  it('peut fermer la colonne du voleur', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    const other = opponentOf(s, id);
+    // Colonne 0 = 0, 4, 8 : deux 8 en place, le 9 part contre le 8 d'en face.
+    setGridWithHidden(s, id, [8, 1, 2, 3, 8, 4, 5, 6, 9, 10, 12, 7]);
+    setGridWithHidden(s, other, [8, 1, 2, 3, 4, 5, 6, 7, 9, 10, 12, 11]);
+    s = drawSteal(s, id);
+
+    s = play(s, { type: 'steal', playerId: id, index: 8, targetPlayerId: other, targetIndex: 0 });
+
+    for (const i of columnIndices(0)) expect(gridOf(s, id)[i]).toBeNull();
+    expect(gridOf(s, other)[0]).toEqual({ value: 9, faceUp: true });
+  });
+
+  it('peut offrir sans le vouloir la colonne de sa victime', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    const other = opponentOf(s, id);
+    // J'ai un 5 et je le donne ; sa colonne 0 en attendait précisément un.
+    setGridWithHidden(s, id, [5, 1, 2, 3, 6, 7, 8, 10, 11, 12, 4, 9]);
+    setGridWithHidden(s, other, [5, 1, 2, 3, 5, 4, 6, 7, 9, 10, 12, 8]);
+    s = drawSteal(s, id);
+
+    s = play(s, { type: 'steal', playerId: id, index: 0, targetPlayerId: other, targetIndex: 8 });
+
+    for (const i of columnIndices(0)) expect(gridOf(s, other)[i]).toBeNull();
+    expect(gridOf(s, id)[0]).toEqual({ value: 9, faceUp: true });
+  });
+
+  it('se refuse au prix d’un retournement', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    setGridWithHidden(s, id, [...CLEAN]);
+    s = drawSteal(s, id);
+
+    s = play(s, { type: 'declineSteal', playerId: id });
+    expect(s.turnStep).toBe('mustFlip');
+    expect(s.players[s.currentPlayerIndex].id).toBe(id);
+    expect(s.lastEvents).toContainEqual({ type: 'stealDeclined', playerId: id });
+
+    s = play(s, { type: 'flipCard', playerId: id, index: 11 });
+    expect(s.players[s.currentPlayerIndex].id).not.toBe(id);
+  });
+
+  it('se refuse gratuitement quand il ne reste rien à retourner', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    const other = opponentOf(s, id);
+    setGrid(s, id, [...CLEAN]);
+    setGridWithHidden(s, other, [...CLEAN]);
+    s = drawSteal(s, id);
+
+    s = play(s, { type: 'declineSteal', playerId: id });
+    // Plus rien à retourner : le tour s'arrête, et la grille entière visible
+    // ferme la manche comme n'importe quel autre coup l'aurait fait.
+    expect(s.turnStep).not.toBe('mustFlip');
+    expect(s.roundCloserId).toBe(id);
+  });
+
+  it('ne propose plus l’échange quand personne n’a de carte visible', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    const other = opponentOf(s, id);
+    setGridWithHidden(s, id, [...CLEAN]);
+    setGrid(s, other, [...CLEAN], false);
+    s = drawSteal(s, id);
+
+    expect(legalActionsFor(s, id)).toEqual(['declineSteal']);
+    expect(
+      expectFail(s, { type: 'steal', playerId: id, index: 0, targetPlayerId: other, targetIndex: 0 }),
+    ).toMatch(/face visible/);
+  });
+});
+
+describe('le joker', () => {
+  it('ne compte aucun point', () => {
+    const s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    setGrid(s, id, [JOKER_CARD, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(gridSum(gridOf(s, id))).toBe(66);
+  });
+
+  it('s’annonce comme un joker dans la vue, pas comme un 0', () => {
+    const s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    setGrid(s, id, [JOKER_CARD, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    const cell = toView(s, id).players.find((p) => p.id === id)!.grid[0];
+    expect(cell).toEqual({ faceUp: true, value: 0, joker: true });
+  });
+
+  it('complète une colonne de deux cartes identiques', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    // Colonne 1 = 1, 5, 9 : un 7, le joker, et un 7 qui arrive de la défausse.
+    setGrid(s, id, [1, 7, 4, 6, 2, JOKER_CARD, 5, 10, 3, 9, 11, 8]);
+    s.discardPile.push(7);
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 9 });
+
+    for (const i of columnIndices(1)) expect(gridOf(s, id)[i]).toBeNull();
+    expect(s.lastEvents).toContainEqual({
+      type: 'groupCleared',
+      playerId: id,
+      kind: 'column',
+      index: 1,
+      value: 7,
+      cells: columnIndices(1),
+      jokers: [5],
+    });
+    // Il repart à la défausse en joker : il continue de circuler.
+    expect(countCard(s.discardPile, JOKER_CARD)).toBe(1);
+  });
+
+  it('ne complète pas une colonne dépareillée', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    setGrid(s, id, [1, 7, 4, 6, 2, JOKER_CARD, 5, 10, 3, 9, 11, 12]);
+    s.discardPile.push(8);
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 9 });
+
+    for (const i of columnIndices(1)) expect(gridOf(s, id)[i]).not.toBeNull();
+  });
+
+  it('ne suffit pas à lui seul : un groupe de jokers n’a aucune valeur', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    // Trois jokers ne sont pas « trois cartes identiques » : ils n'ont rien à
+    // compléter. Le paquet n'en contient qu'un, mais la règle doit être écrite.
+    setGrid(s, id, [JOKER_CARD, 1, 2, 3, JOKER_CARD, 5, 6, 7, JOKER_CARD, 9, 10, 4]);
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 11 });
+
+    for (const i of columnIndices(0)) expect(gridOf(s, id)[i]).not.toBeNull();
+  });
+
+  it('perd son pouvoir dès qu’on le recouvre', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    setGrid(s, id, [1, 7, 4, 6, 2, JOKER_CARD, 5, 10, 3, 7, 11, 8]);
+    s.discardPile.push(9);
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 5 });
+
+    // La case ne complète plus rien : la colonne de deux 7 reste en place.
+    expect(gridOf(s, id)[5]).toEqual({ value: 9, faceUp: true });
+    for (const i of columnIndices(1)) expect(gridOf(s, id)[i]).not.toBeNull();
+    expect(countCard(s.discardPile, JOKER_CARD)).toBe(1);
+  });
+
+  it('peut fermer une colonne et une ligne du même coup', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    // Le joker en 5 est à l'intersection : colonne 1 de 7, ligne 1 de 3.
+    setGrid(s, id, [1, 7, 4, 6, 3, JOKER_CARD, 3, 10, 2, 7, 5, 8]);
+    s.discardPile.push(3);
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 7 });
+
+    const grid = gridOf(s, id);
+    for (const i of [...columnIndices(1), ...rowIndices(1)]) expect(grid[i]).toBeNull();
+    const groups = s.lastEvents.filter((e) => e.type === 'groupCleared');
+    expect(groups).toHaveLength(2);
+    // Le joker est signalé dans les deux : c'est lui qui a fermé l'une et l'autre.
+    for (const g of groups) expect(g).toMatchObject({ jokers: [5] });
+    // Une seule carte part à la défausse par case vidée, pas deux pour le joker.
+    expect(countCard(s.discardPile, JOKER_CARD)).toBe(1);
   });
 });

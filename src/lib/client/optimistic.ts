@@ -1,4 +1,4 @@
-import type { GameView, ViewCell, ViewPlayer } from '@/lib/skyjo';
+import { JOKER_CARD, cellToCard, type GameView, type ViewCell, type ViewPlayer } from '@/lib/skyjo';
 import type { ClientAction } from './actions';
 
 /**
@@ -25,8 +25,15 @@ import type { ClientAction } from './actions';
  * pari de quelques dizaines de millisecondes.
  */
 
-function faceUp(cell: ViewCell): cell is { faceUp: true; value: number } {
+function faceUp(cell: ViewCell): cell is { faceUp: true; value: number; joker?: true } {
   return cell !== null && cell.faceUp;
+}
+
+/** La case que devient une case qui reçoit cette carte, joker compris. */
+function placedCell(card: NonNullable<GameView['heldCard']>): ViewCell {
+  return card === JOKER_CARD
+    ? { faceUp: true, value: 0, joker: true }
+    : { faceUp: true, value: card };
 }
 
 /** Recompte ce qui dépend de la grille : les tuiles de score ne doivent pas décrocher. */
@@ -50,6 +57,12 @@ export function optimisticView(
   playerId: string,
 ): GameView | null {
   switch (action.type) {
+    // Un interrupteur qui attend un aller-retour pour changer d'état se lit
+    // comme un tap raté, et on le retape. Rien n'est deviné ici : c'est l'hôte
+    // qui décide, et le serveur ne fera que confirmer.
+    case 'setVariant':
+      return { ...view, variant: action.variant };
+
     // La valeur retournée est un secret du serveur. On ne la devine pas : la
     // carte part en rotation (cf. `revealingIndex`) et la valeur suivra.
     //
@@ -99,9 +112,7 @@ export function optimisticView(
       const cell = me?.grid[action.index];
       if (!me || cell === undefined || cell === null || view.heldCard === null) return null;
 
-      const grid = me.grid.map((c, i) =>
-        i === action.index ? ({ faceUp: true, value: view.heldCard! } as ViewCell) : c,
-      );
+      const grid = me.grid.map((c, i) => (i === action.index ? placedCell(view.heldCard!) : c));
 
       return {
         ...view,
@@ -111,7 +122,7 @@ export function optimisticView(
         heldCard: null,
         // Une case cachée ne dit pas ce qu'elle jette : on laisse le serveur
         // révéler le sommet de la défausse plutôt que d'afficher un mensonge.
-        discardTop: faceUp(cell) ? cell.value : view.discardTop,
+        discardTop: faceUp(cell) ? cellToCard(cell) : view.discardTop,
         legalActions: [],
       };
     }

@@ -16,6 +16,25 @@ rien de ce que l'adversaire est en train de peser. Le jeu de société ne conna�
 ni l'une ni l'autre ; la page Règles de l'application signale les deux écarts
 pour qu'on ne les emporte pas par erreur sur une vraie table.
 
+Et un **mode spicy**, en option, que l'hôte choisit dans le salon avant de
+distribuer. Il n'ajoute rien au tour de jeu — ni au comptage, ni aux
+éliminations, ni à la pénalité de fermeture : il ajoute trois cartes au paquet.
+**Deux -5**, du point sec (à deux exemplaires, une colonne de -5 reste
+impossible). **Un joker**, qui vaut 0 et complète n'importe quel groupe : une
+colonne `7 / joker / 7` saute. Et **quatre cartes Vol**, qui échangent une de
+tes cartes face visible contre celle d'un adversaire, face visible aussi — les
+deux grilles rejouant alors leurs éliminations, si bien qu'on peut prendre la
+carte qui ferme sa colonne comme laisser à sa victime celle qui ferme la sienne.
+
+Le Vol n'a pas de valeur, donc pas de place dans une grille : il n'existe que
+dans la pioche, et ne se déclenche qu'en étant *pioché*. Ce n'est pas un détail
+d'implémentation mais la règle qui fixe sa fréquence — environ un par manche à
+deux joueurs. Le joker, lui, vit dans une grille, et c'est ce qui a coûté le
+plus cher : une case de grille cesse d'être un nombre. Elle reste pourtant
+`value: 0` avec un drapeau, pour que le comptage n'ait pas une ligne à changer ;
+seules les éliminations regardent le drapeau, parce que ce sont elles que le
+joker change.
+
 ## Comment ça marche
 
 ```
@@ -97,7 +116,17 @@ Le fichier `src/lib/skyjo/engine.test.ts` sert aussi de spécification lisible :
 chaque règle y a son test nommé en français, les officielles comme la maison —
 dont un test qui vérifie que trois cartes identiques dans une ligne intacte ne
 suffisent *pas*, et un autre que les mêmes trois cartes suffisent dès qu'une
-colonne éliminée a raccourci la ligne.
+colonne éliminée a raccourci la ligne. Le mode spicy y a ses propres sections :
+qu'un Vol ne se trouve jamais ailleurs que dans la pioche, qu'un échange ne
+change le nombre de cartes cachées de personne, que renoncer coûte un
+retournement, qu'un joker complète une colonne et une ligne du même coup, et
+qu'il perd son pouvoir dès qu'on pose une carte dessus.
+
+`npm run smoke` joue deux parties complètes par HTTP, une par mode. Les règles
+du vol et du joker sont couvertes au coup par coup côté moteur, avec une graine
+fixe ; ce que le smoke vérifie en plus, c'est que les trois actions ajoutées
+franchissent la validation et le magasin — un Vol tiré au hasard ne peut pas
+s'en charger, il ne sort pas à toutes les parties.
 
 `src/lib/client/flights.test.ts` teste l'autre moitié : la **chronologie** d'un
 coup. Une carte prise, une carte posée, une carte jetée et une colonne qui

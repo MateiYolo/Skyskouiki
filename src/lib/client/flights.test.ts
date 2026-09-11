@@ -47,6 +47,7 @@ function makeView(patch: Partial<GameView> = {}): GameView {
     version: 12,
     phase: 'playing',
     round: 1,
+    variant: 'classic',
     targetScore: 100,
     hostId: ME,
     players: [player(ME), player(THEM)],
@@ -87,6 +88,7 @@ const cleared = (
   playerId: string,
   cells: number[],
   kind: 'column' | 'row' = 'column',
+  jokers: number[] = [],
 ): GameEvent => ({
   type: 'groupCleared',
   playerId,
@@ -94,6 +96,7 @@ const cleared = (
   index: 1,
   value: 7,
   cells,
+  jokers,
 });
 
 describe('flightsForEvents', () => {
@@ -155,6 +158,78 @@ describe('flightsForEvents', () => {
     const first = flightsForEvents(view).find((f) => f.from === cellAnchor(THEM, 1))!;
     // `ClearEcho.delay` vient de là : la carte s'efface pile quand elle décolle.
     expect(first.delay).toBe(clearDelay(view));
+  });
+
+  it('fait se croiser les deux cartes d’un vol, chacune vers la grille de l’autre', () => {
+    const mine = cellAnchor(ME, 2);
+    const theirs = cellAnchor(THEM, 7);
+    const view = makeView({
+      lastEvents: [
+        {
+          type: 'stole',
+          playerId: ME,
+          index: 2,
+          taken: -2,
+          targetPlayerId: THEM,
+          targetIndex: 7,
+          given: 12,
+        },
+      ],
+    });
+
+    const flights = flightsForEvents(view);
+    const flying = moving(flights);
+    // Mon 12 part chez l'autre, son -2 vient chez moi — en même temps.
+    expect(flying).toEqual([
+      { from: mine, to: theirs, value: 12, delay: FLIGHT_NEXT },
+      { from: theirs, to: mine, value: -2, delay: FLIGHT_NEXT },
+    ]);
+
+    // Les deux grilles affichent déjà le résultat : chaque case garde un
+    // instant la carte qui la quitte, sinon on voit celle qui arrive deux fois.
+    const masks = flights.filter((f) => f.hold);
+    expect(masks).toEqual([
+      { from: mine, to: mine, value: 12, delay: 0, hold: FLIGHT_NEXT },
+      { from: theirs, to: theirs, value: -2, delay: 0, hold: FLIGHT_NEXT },
+    ]);
+    for (const mask of masks) expect(mask.hold).toBe(flying[0].delay);
+  });
+
+  it('laisse le vol se poser avant de vider la colonne qu’il vient de fermer', () => {
+    const view = makeView({
+      lastEvents: [
+        {
+          type: 'stole',
+          playerId: THEM,
+          index: 1,
+          taken: 7,
+          targetPlayerId: ME,
+          targetIndex: 3,
+          given: 4,
+        },
+        cleared(THEM, [1, 5, 9]),
+      ],
+    });
+    expect(clearDelay(view)).toBeGreaterThan(FLIGHT_NEXT + FLIGHT_DURATION);
+  });
+
+  it('rejoue mon propre vol : rien n’en était parti au doigt', () => {
+    const view = makeView({
+      lastEvents: [
+        {
+          type: 'stole',
+          playerId: ME,
+          index: 0,
+          taken: 1,
+          targetPlayerId: THEM,
+          targetIndex: 0,
+          given: 2,
+        },
+      ],
+    });
+    // Contrairement à un échange ordinaire, le vol n'est pas joué localement :
+    // il dépend de la grille d'en face, que seule la réponse du serveur fixe.
+    expect(moving(flightsForEvents(view))).toHaveLength(2);
   });
 
   it('n’invente pas de carte sur un trou déjà présent dans la ligne', () => {

@@ -52,6 +52,12 @@ export function useMoveEcho(view: GameView | null): MoveEcho | null {
         case 'initialFlip':
           touched[event.playerId] = event.index;
           break;
+        // Un vol touche deux grilles d'un coup, une case dans chacune : c'est
+        // exactement ce que ce relevé sait porter, une case par joueur.
+        case 'stole':
+          touched[event.playerId] = event.index;
+          touched[event.targetPlayerId] = event.targetIndex;
+          break;
         case 'drew':
           drewFrom = event.from;
           break;
@@ -62,6 +68,7 @@ export function useMoveEcho(view: GameView | null): MoveEcho | null {
           cleared[event.playerId] = {
             indices: event.cells,
             value: event.value,
+            jokers: event.jokers ?? [],
             // Les cartes restent en place jusque-là, puis partent à la
             // défausse (cf. `flightsForEvents`). Le même instant des deux
             // côtés : le fantôme s'efface pile quand la carte décolle.

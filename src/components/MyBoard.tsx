@@ -23,6 +23,8 @@ export interface MyBoardProps {
   markTargets: boolean;
   onCell: (index: number) => void;
   touched: number | null;
+  /** Ma carte désignée pour un Vol, le temps de choisir celle d'en face. */
+  selected: number | null;
   cleared: ClearEcho | null;
   echoKey: number;
   /** Cases retournées sous le doigt, en attente de leur valeur. */
@@ -42,6 +44,7 @@ export const MyBoard = memo(function MyBoard({
   markTargets,
   onCell,
   touched,
+  selected,
   cleared,
   echoKey,
   revealing,
@@ -82,6 +85,7 @@ export const MyBoard = memo(function MyBoard({
             markTargets={markTargets}
             onCell={onCell}
             touched={touched}
+            selected={selected}
             cleared={cleared}
             echoKey={echoKey}
             revealing={revealing}

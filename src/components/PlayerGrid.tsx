@@ -6,7 +6,7 @@ import { EmptySlot, PlayingCard, type CardSize } from './PlayingCard';
 import { cellAnchor } from '@/lib/client/flights';
 import { CLEAR_STAGGER } from '@/lib/client/motion';
 
-import type { ViewCell } from '@/lib/skyjo';
+import { JOKER_CARD, cellToCard, type ValueCard, type ViewCell } from '@/lib/skyjo';
 
 /**
  * La grille 4 × 3 d'un joueur — la mienne en grand, celle des autres en petit.
@@ -30,6 +30,8 @@ export interface ClearEcho {
   /** Les cases réellement vidées — pas la géométrie du groupe. */
   indices: number[];
   value: number;
+  /** Celles de ces cases qui portaient le joker : il ne doit pas partir déguisé. */
+  jokers: number[];
   /** Combien de temps (en secondes) les cartes restent visibles avant de partir. */
   delay: number;
 }
@@ -48,6 +50,14 @@ export interface PlayerGridProps {
   onCell?: (index: number) => void;
   /** Case jouée au dernier coup. */
   touched?: number | null;
+  /**
+   * Case retenue par le joueur, en attente du second geste.
+   *
+   * Un seul coup en a besoin : le Vol se joue en deux taps — ma carte, puis la
+   * sienne — et sans marque il n'y a aucun moyen de savoir ce qu'on a déjà
+   * désigné entre les deux.
+   */
+  selected?: number | null;
   /** Groupe éliminé au dernier coup. */
   cleared?: ClearEcho | null;
   /** Version de la partie : remonte les échos à chaque nouveau coup. */
@@ -77,6 +87,28 @@ function TouchedRing({ radius }: { radius: string }) {
 }
 
 /**
+ * La carte que je viens de désigner, et qui attend le second geste.
+ *
+ * Le léger agrandissement que porte déjà `PlayingCard` ne suffit pas ici : les
+ * autres cartes visibles restent des cibles légitimes — on peut changer d'avis
+ * — donc elles gardent toutes leur liseré, et la seule différence était quatre
+ * pour cent de taille. Le liseré prend la couleur du Vol : magenta dans la
+ * main, magenta sur ma carte, magenta sur la grille d'en face. Trois fois la
+ * même couleur pour un seul échange.
+ */
+function SelectedRing({ radius }: { radius: string }) {
+  return (
+    <span
+      className={`pointer-events-none absolute -inset-[3px] ${radius}`}
+      style={{
+        boxShadow: '0 0 0 2.5px var(--color-steal), 0 0 18px rgb(233 78 192 / 0.55)',
+      }}
+      aria-hidden
+    />
+  );
+}
+
+/**
  * Le groupe qui saute.
  *
  * Les cartes sont déjà parties de l'état du jeu : sans ce fantôme, trois cases
@@ -92,7 +124,7 @@ function ClearGhost({
   delay,
   rank,
 }: {
-  value: number;
+  value: ValueCard;
   size: CardSize;
   delay: number;
   /** Rang de la carte dans le groupe : le coup d'œil part d'un bout à l'autre. */
@@ -138,6 +170,7 @@ const GridCell = memo(function GridCell({
   playable,
   marked,
   touched,
+  selected,
   echoKey,
   turning,
   anchor,
@@ -145,7 +178,7 @@ const GridCell = memo(function GridCell({
 }: {
   index: number;
   /** `null` quand la carte est face cachée : sa valeur est un secret du serveur. */
-  value: number | null;
+  value: ValueCard | null;
   faceUp: boolean;
   size: CardSize;
   radius: string;
@@ -154,6 +187,7 @@ const GridCell = memo(function GridCell({
   /** …et il faut le lui montrer. Faux quand *toutes* les cases le sont. */
   marked: boolean;
   touched: boolean;
+  selected: boolean;
   echoKey: number;
   turning: boolean;
   anchor: string | undefined;
@@ -168,9 +202,15 @@ const GridCell = memo(function GridCell({
       faceUp={faceUp || turning}
       size={size}
       intent={playable && marked ? 'target' : 'none'}
-      overlay={touched ? <TouchedRing key={echoKey} radius={radius} /> : undefined}
+      selected={selected}
+      overlay={
+        selected ? (
+          <SelectedRing radius={radius} />
+        ) : touched ? (
+          <TouchedRing key={echoKey} radius={radius} />
+        ) : undefined
+      }
       onClick={playable && onCell ? press : undefined}
-      aria-label={faceUp ? `Carte ${value}` : 'Carte face cachée'}
     />
   );
 });
@@ -183,6 +223,7 @@ export const PlayerGrid = memo(function PlayerGrid({
   markTargets = true,
   onCell,
   touched = null,
+  selected = null,
   cleared = null,
   echoKey = 0,
   revealing,
@@ -206,7 +247,10 @@ export const PlayerGrid = memo(function PlayerGrid({
               {clearing?.has(index) && (
                 <ClearGhost
                   key={echoKey}
-                  value={cleared!.value}
+                  // Le joker repart en joker : c'est lui qui a fermé le groupe,
+                  // le montrer sous la valeur des autres rendrait l'élimination
+                  // incompréhensible.
+                  value={cleared!.jokers.includes(index) ? JOKER_CARD : cleared!.value}
                   size={size}
                   delay={cleared!.delay}
                   rank={cleared!.indices.indexOf(index)}
@@ -220,13 +264,14 @@ export const PlayerGrid = memo(function PlayerGrid({
           <GridCell
             key={index}
             index={index}
-            value={cell.faceUp ? cell.value : null}
+            value={cell.faceUp ? cellToCard(cell) : null}
             faceUp={cell.faceUp}
             size={size}
             radius={radius}
             playable={isTarget?.(index) ?? false}
             marked={markTargets}
             touched={touched === index}
+            selected={selected === index}
             echoKey={echoKey}
             turning={revealing?.includes(index) ?? false}
             anchor={playerId ? cellAnchor(playerId, index) : undefined}
