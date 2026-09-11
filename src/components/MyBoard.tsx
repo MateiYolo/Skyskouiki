@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import { Avatar, ScoreTiles } from './PlayerPanel';
-import { PlayerGrid, type ClearEcho } from './PlayerGrid';
+import { PlayerGrid, type ClearEcho, type SelectedTone } from './PlayerGrid';
 import type { GameView, ViewPlayer } from '@/lib/skyjo';
 
 /**
@@ -22,9 +22,11 @@ export interface MyBoardProps {
   /** Faux quand *toutes* les cases sont jouables : entourer les douze n'apprend rien. */
   markTargets: boolean;
   onCell: (index: number) => void;
-  touched: number | null;
-  /** Ma carte désignée pour un Vol, le temps de choisir celle d'en face. */
+  touched: number | readonly number[] | null;
+  /** Ma carte désignée pour un Vol ou une Valse, le temps de choisir l'autre. */
   selected: number | null;
+  /** Laquelle des deux : la marque en prend la couleur. */
+  selectedTone: SelectedTone;
   cleared: ClearEcho | null;
   echoKey: number;
   /** Cases retournées sous le doigt, en attente de leur valeur. */
@@ -45,6 +47,7 @@ export const MyBoard = memo(function MyBoard({
   onCell,
   touched,
   selected,
+  selectedTone,
   cleared,
   echoKey,
   revealing,
@@ -86,6 +89,7 @@ export const MyBoard = memo(function MyBoard({
             onCell={onCell}
             touched={touched}
             selected={selected}
+            selectedTone={selectedTone}
             cleared={cleared}
             echoKey={echoKey}
             revealing={revealing}

@@ -17,9 +17,20 @@ export interface LastMove {
   text: string;
 }
 
-/** Le nom d'une carte échangée par un Vol, face cachée comprise. */
-function stolenName(card: ValueCard | null): string {
+/** Le nom d'une carte déplacée par un Vol ou une Valse, face cachée comprise. */
+function movedName(card: ValueCard | null): string {
   return card === null ? 'une carte cachée' : cardName(card);
+}
+
+/**
+ * Les deux cartes d'une Valse, mises en mots.
+ *
+ * Deux dos donnaient « une carte cachée et une carte cachée » : la phrase
+ * bégayait là où, à table, on dit simplement « deux cartes cachées ».
+ */
+export function swappedPair(first: ValueCard | null, second: ValueCard | null): string {
+  if (first === null && second === null) return 'deux cartes cachées';
+  return `${movedName(first)} et ${movedName(second)}`;
 }
 
 function describe(event: GameEvent): string | null {
@@ -37,9 +48,17 @@ function describe(event: GameEvent): string | null {
     case 'stole':
       // Une carte jamais retournée n'a pas de nom : elle a traversé la table
       // sans que personne — le voleur compris — ne sache ce qu'elle valait.
-      return `vole ${stolenName(event.taken)}, laisse ${stolenName(event.given)}`;
+      return `vole ${movedName(event.taken)}, laisse ${movedName(event.given)}`;
     case 'stealDeclined':
       return 'renonce au Vol';
+    case 'swapDrawn':
+      return 'pioche une Valse';
+    case 'swapped':
+      // Deux cases de la même grille : personne d'autre n'a bougé, mais ce qui
+      // se lisait à un endroit se lit maintenant à l'autre.
+      return `intervertit ${swappedPair(event.first, event.second)}`;
+    case 'swapDeclined':
+      return 'renonce à la Valse';
     default:
       return null;
   }
@@ -79,6 +98,9 @@ export function heldSummary(view: GameView): { text: string; revealed: boolean }
   // et tout le tour dépend de ce qu'il va en faire.
   if (view.turnStep === 'stealing') {
     return { text: `${name} a pioché un Vol et choisit son échange`, revealed: true };
+  }
+  if (view.turnStep === 'swapping') {
+    return { text: `${name} a pioché une Valse et réarrange sa grille`, revealed: true };
   }
   if (view.heldFrom === null) return null;
 

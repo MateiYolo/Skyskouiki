@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { memo, useMemo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { FLIP, SNAP } from '@/lib/client/motion';
-import { JOKER_CARD, STEAL_CARD, type PileCard } from '@/lib/skyjo';
+import { JOKER_CARD, STEAL_CARD, SWAP_CARD, type PileCard } from '@/lib/skyjo';
 
 /**
  * Une carte Skyjo.
@@ -13,18 +13,28 @@ import { JOKER_CARD, STEAL_CARD, type PileCard } from '@/lib/skyjo';
  * cyan pour le zéro, puis vert / jaune / rouge à mesure que ça fait mal. C'est
  * ce qui permet de lire une grille adverse d'un coup d'œil, sans lire un chiffre.
  *
- * Les deux cartes du mode spicy sortent volontairement de cette échelle : elles
- * ne valent pas « un peu plus » ou « un peu moins », elles font autre chose. Le
- * joker est la seule carte presque blanche du jeu et le Vol la seule magenta —
- * à la taille d'une vignette adverse, c'est la couleur qui les fait reconnaître
- * avant le symbole.
+ * Les cartes du mode spicy sortent volontairement de cette échelle : elles ne
+ * valent pas « un peu plus » ou « un peu moins », elles font autre chose. Le
+ * joker est la seule carte presque blanche du jeu, le Vol la seule magenta et
+ * la Valse la seule turquoise — à la taille d'une vignette, c'est la couleur
+ * qui les fait reconnaître avant le symbole.
  */
 
-export type Tone = 'navy' | 'sky' | 'green' | 'yellow' | 'red' | 'joker' | 'steal' | 'blank';
+export type Tone =
+  | 'navy'
+  | 'sky'
+  | 'green'
+  | 'yellow'
+  | 'red'
+  | 'joker'
+  | 'steal'
+  | 'swap'
+  | 'blank';
 
 export function toneOf(card: PileCard): Tone {
   if (card === JOKER_CARD) return 'joker';
   if (card === STEAL_CARD) return 'steal';
+  if (card === SWAP_CARD) return 'swap';
   if (card < 0) return 'navy';
   if (card === 0) return 'sky';
   if (card <= 4) return 'green';
@@ -44,6 +54,10 @@ const TONES: Record<Tone, { from: string; to: string; ink: string; edge: string 
   // Le Vol ne se pose jamais dans une grille : on ne le voit qu'en main, le
   // temps d'un tour.
   steal: { from: '#ff8adf', to: '#af1f8c', ink: '#ffffff', edge: '#ffc2ee' },
+  // La Valse non plus. Le turquoise la sépare franchement du magenta du Vol :
+  // les deux cartes se piochent au même endroit et demandent deux gestes
+  // différents, elles ne doivent pas se confondre le temps d'un coup d'œil.
+  swap: { from: '#7cf5dd', to: '#0f9b8a', ink: '#04322c', edge: '#c8fff4' },
   // Retournée, mais pas encore lue : la carte a bougé au doigt, sa valeur
   // arrive du serveur. Une face neutre le dit sans rien inventer.
   blank: { from: '#57497e', to: '#332a55', ink: '#ffffff', edge: '#7b6bab' },
@@ -113,6 +127,7 @@ const INTENT_CLASS: Record<CardIntent, string> = {
 function describeCard(card: PileCard): string {
   if (card === JOKER_CARD) return 'Joker, vaut 0 et complète n’importe quel groupe';
   if (card === STEAL_CARD) return 'Carte Vol';
+  if (card === SWAP_CARD) return 'Carte Valse';
   return `Carte ${card}`;
 }
 
@@ -191,6 +206,10 @@ function Card({
             </>
           ) : value === STEAL_CARD ? (
             <span className="card-numeral font-black leading-none">⇄</span>
+          ) : value === SWAP_CARD ? (
+            // Vertical, quand le Vol est horizontal : l'un traverse la table,
+            // l'autre remue sa propre grille.
+            <span className="card-numeral font-black leading-none">⇅</span>
           ) : (
             <span className="tnum card-numeral font-black leading-none tracking-tight">{value}</span>
           )}

@@ -20,7 +20,11 @@ import { heldSummary, lastMove } from '@/lib/skyjo';
 import type { GameView, LegalAction, Variant } from '@/lib/skyjo';
 
 /** Ce que le joueur doit faire, là, maintenant. */
-function prompt(view: GameView, stealFrom: number | null): { title: string; hint: string } {
+function prompt(
+  view: GameView,
+  /** La carte déjà désignée d'un échange en deux gestes, s'il y en a une. */
+  picked: number | null,
+): { title: string; hint: string } {
   const me = view.players.find((p) => p.id === view.you.id);
   const current = view.players.find((p) => p.id === view.currentPlayerId);
 
@@ -61,11 +65,20 @@ function prompt(view: GameView, stealFrom: number | null): { title: string; hint
       // Le Vol se joue en deux gestes : la consigne doit dire lequel des deux
       // reste à faire, sinon le premier tap semble n'avoir rien déclenché.
       if (view.turnStep === 'stealing') {
-        return stealFrom === null
+        return picked === null
           ? { title: 'Vol !', hint: 'Donne une de tes cartes, visible ou cachée — ou renonce.' }
           : {
               title: 'Contre laquelle ?',
               hint: 'Ouvre la grille d’un adversaire et tape la carte que tu prends.',
+            };
+      }
+      // La Valse aussi se joue en deux gestes, mais les deux se font chez moi.
+      if (view.turnStep === 'swapping') {
+        return picked === null
+          ? { title: 'Valse !', hint: 'Tape une de tes cartes, visible ou cachée — ou renonce.' }
+          : {
+              title: 'Avec laquelle ?',
+              hint: 'Tape une seconde carte : les deux échangent de place.',
             };
       }
       return { title: 'Retourne une carte', hint: 'Tu as jeté la pioche : il faut en découvrir une.' };
@@ -117,7 +130,7 @@ export function GameClient({ code }: { code: string }) {
   const [showSettings, setShowSettings] = useState(false);
   const [joining, setJoining] = useState(false);
   const [inspecting, setInspecting] = useState<string | null>(null);
-  // Ma carte désignée pour un Vol, en attente de sa contrepartie.
+  // Ma carte désignée pour un Vol ou une Valse, en attente de sa contrepartie.
   const [pickedCell, setPickedCell] = useState<number | null>(null);
 
   // Préférence de son lue dans le navigateur, donc après le montage.
@@ -172,6 +185,20 @@ export function GameClient({ code }: { code: string }) {
     legalRef.current = legal;
   }, [legal]);
 
+  /**
+   * La carte déjà désignée, telle que la règle du moment l'autorise.
+   *
+   * Gardée au même endroit que `legal`, et pour la même raison — mais surtout
+   * remise à zéro par le calcul lui-même : une sélection laissée par un tour
+   * précédent ferait partir la Valse suivante dès le premier tap, sur une case
+   * que le joueur ne voit plus.
+   */
+  const picked = legal.has('steal') || legal.has('swap') ? pickedCell : null;
+  const pickedRef = useRef(picked);
+  useEffect(() => {
+    pickedRef.current = picked;
+  }, [picked]);
+
   const onCell = useCallback(
     (index: number) => {
       const now = legalRef.current;
@@ -181,7 +208,20 @@ export function GameClient({ code }: { code: string }) {
       // Un Vol ne part pas au premier tap : on retient la carte, et c'est le
       // second geste — sur la grille d'en face — qui envoie le coup. Retaper la
       // même carte la relâche.
-      if (now.has('steal')) setPickedCell((current) => (current === index ? null : index));
+      if (now.has('steal')) return setPickedCell((current) => (current === index ? null : index));
+      // Une Valse se joue entièrement ici : la première case attend, la
+      // seconde envoie l'échange. La sélection se lit dans une référence
+      // plutôt que dans l'état, pour que ce gestionnaire garde son identité
+      // d'un coup à l'autre (cf. `legalRef`).
+      if (now.has('swap')) {
+        const first = pickedRef.current;
+        if (first === null || first === index) {
+          setPickedCell(first === index ? null : index);
+          return;
+        }
+        setPickedCell(null);
+        void run({ type: 'swap', index: first, otherIndex: index });
+      }
     },
     [run],
   );
@@ -204,15 +244,21 @@ export function GameClient({ code }: { code: string }) {
       }
       if (legal.has('placeCard')) return true;
       // Un Vol échange n'importe laquelle de mes cartes, dos compris : donner
-      // une carte qu'on n'a jamais vue est un coup à part entière.
-      if (legal.has('steal')) return true;
+      // une carte qu'on n'a jamais vue est un coup à part entière. La Valse en
+      // prend deux, avec la même liberté.
+      if (legal.has('steal') || legal.has('swap')) return true;
       if (legal.has('flipCard')) return !cell.faceUp;
       return false;
     },
     [legal, me, revealing],
   );
 
-  const onDecline = useCallback(() => void run({ type: 'declineSteal' }), [run]);
+  // Un seul bouton « Renoncer » pour les deux cartes : c'est la règle du moment
+  // qui dit à laquelle on renonce.
+  const onDecline = useCallback(() => {
+    const swapping = legalRef.current.has('declineSwap');
+    void run({ type: swapping ? 'declineSwap' : 'declineSteal' });
+  }, [run]);
   const onDraw = useCallback(() => void run({ type: 'drawFromPile' }), [run]);
   const onTakeDiscard = useCallback(() => void run({ type: 'takeDiscard' }), [run]);
   const onDiscardHeld = useCallback(() => void run({ type: 'discardHeld' }), [run]);
@@ -281,21 +327,20 @@ export function GameClient({ code }: { code: string }) {
     return <ProfileGate identity={identity} onSave={update} />;
   }
 
-  // La carte retenue n'a de sens que tant qu'un Vol est à résoudre : plutôt
-  // qu'un effet qui la remet à zéro après coup, on la lit à travers la règle du
-  // moment — le tour suivant repart forcément sans sélection.
-  const stealFrom = legal.has('steal') ? pickedCell : null;
+  // La carte retenue n'a de sens que tant qu'un échange est à résoudre (cf.
+  // `picked`) : seul le Vol l'envoie depuis la grille d'en face.
+  const stealFrom = legal.has('steal') ? picked : null;
 
-  const { title, hint } = prompt(view, stealFrom);
+  const { title, hint } = prompt(view, picked);
   const myTurn = view.currentPlayerId === view.you.id;
   const held = heldSummary(view);
   // Résolu au rendu : un joueur qui quitte referme sa fiche de lui-même.
   const inspected = opponents.find((p) => p.id === inspecting) ?? null;
 
   // Quand *toutes* les cases sont jouables — une carte à poser, une carte à
-  // donner au Vol — douze liserés jaunes ne désignent rien et couvrent la seule
-  // chose à lire, les cartes.
-  const markTargets = !legal.has('placeCard') && !legal.has('steal');
+  // donner au Vol, deux à intervertir — douze liserés jaunes ne désignent rien
+  // et couvrent la seule chose à lire, les cartes.
+  const markTargets = !legal.has('placeCard') && !legal.has('steal') && !legal.has('swap');
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
@@ -374,6 +419,7 @@ export function GameClient({ code }: { code: string }) {
             heldCard={view.heldCard}
             heldFrom={view.heldFrom}
             stealing={view.turnStep === 'stealing'}
+            swapping={view.turnStep === 'swapping'}
             heldNote={held?.text ?? null}
             holder={holder}
             drewFrom={echo?.drewFrom ?? null}
@@ -381,7 +427,7 @@ export function GameClient({ code }: { code: string }) {
             canDraw={legal.has('drawFromPile')}
             canTakeDiscard={legal.has('takeDiscard')}
             canDiscardHeld={legal.has('discardHeld')}
-            canDecline={legal.has('declineSteal')}
+            canDecline={legal.has('declineSteal') || legal.has('declineSwap')}
             onDraw={onDraw}
             onTakeDiscard={onTakeDiscard}
             onDiscardHeld={onDiscardHeld}
@@ -396,7 +442,8 @@ export function GameClient({ code }: { code: string }) {
               isTarget={isTarget}
               markTargets={markTargets}
               onCell={onCell}
-              selected={stealFrom}
+              selected={picked}
+              selectedTone={view.turnStep === 'swapping' ? 'swap' : 'steal'}
               touched={echo?.touched[view.you.id] ?? null}
               cleared={echo?.cleared[view.you.id] ?? null}
               echoKey={echo?.version ?? 0}
@@ -673,7 +720,7 @@ function VariantPicker({
 }) {
   const spicy = variant === 'spicy';
   const note = spicy
-    ? 'Deux -5, quatre cartes Vol et un joker glissés dans le paquet.'
+    ? 'Deux -5, un joker, quatre Vol et quatre Valse glissés dans le paquet.'
     : 'Le paquet officiel, rien de plus.';
 
   return (

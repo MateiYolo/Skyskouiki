@@ -1,9 +1,9 @@
 /**
  * Test de bout en bout de l'API : deux joueurs, une partie complète jouée par
  * HTTP jusqu'à ce que quelqu'un atteigne le seuil — une fois en classique, une
- * fois en spicy, parce que le mode spicy ajoute trois actions (le choix du
- * mode, le vol et son refus) qui doivent franchir la validation et le magasin
- * comme les autres.
+ * fois en spicy, parce que le mode spicy ajoute cinq actions (le choix du
+ * mode, le vol et son refus, la valse et son refus) qui doivent franchir la
+ * validation et le magasin comme les autres.
  *
  * Vérifie ce que les tests unitaires du moteur ne couvrent pas : les routes, la
  * validation, le verrou optimiste et le magasin (mémoire ou Supabase selon la
@@ -106,6 +106,30 @@ function bestSteal(state, id) {
   };
 }
 
+/**
+ * Une valse jouable : les deux cases les plus éloignées de ma grille. Le coup
+ * n'a rien de malin, mais il déplace bien deux cartes — c'est ce qu'on vérifie
+ * ici. `null` s'il n'y a pas deux cases à intervertir.
+ */
+function bestSwap(state, id) {
+  const cells = state.players
+    .find((p) => p.id === id)
+    .grid.map((cell, index) => ({ cell, index }))
+    .filter(({ cell }) => cell !== null);
+  if (cells.length < 2) return null;
+  return { index: cells[0].index, otherIndex: cells[cells.length - 1].index };
+}
+
+/** Renonce à une carte spéciale, et paie le retournement quand il est dû. */
+async function declineAndFlip(code, id, action) {
+  const declined = await act(code, id, action);
+  if (declined.turnStep !== 'mustFlip') return;
+  const next = declined.players
+    .find((p) => p.id === id)
+    .grid.findIndex((cell) => cell && cell.faceUp === false);
+  await act(code, id, { type: 'flipCard', index: next });
+}
+
 /** Un tour « le plus vite possible » : on découvre une carte à chaque passage. */
 async function playTurn(code, state) {
   const id = state.currentPlayerId;
@@ -123,13 +147,19 @@ async function playTurn(code, state) {
       await act(code, id, { type: 'steal', ...steal });
       return;
     }
-    const declined = await act(code, id, { type: 'declineSteal' });
-    if (declined.turnStep === 'mustFlip') {
-      const next = declined.players
-        .find((p) => p.id === id)
-        .grid.findIndex((cell) => cell && cell.faceUp === false);
-      await act(code, id, { type: 'flipCard', index: next });
+    await declineAndFlip(code, id, { type: 'declineSteal' });
+    return;
+  }
+
+  // Même chose pour la Valse, à ceci près qu'elle se résout entièrement dans
+  // ma grille.
+  if (drawn.turnStep === 'swapping') {
+    const swap = bestSwap(drawn, id);
+    if (swap) {
+      await act(code, id, { type: 'swap', ...swap });
+      return;
     }
+    await declineAndFlip(code, id, { type: 'declineSwap' });
     return;
   }
 
@@ -146,7 +176,7 @@ async function playTurn(code, state) {
  *
  * Les règles du vol et du joker sont couvertes au coup par coup côté moteur,
  * avec une graine fixe. Ce qu'on vérifie ici, c'est ce que les tests unitaires
- * ne voient pas : que les trois actions ajoutées franchissent la validation et
+ * ne voient pas : que les cinq actions ajoutées franchissent la validation et
  * arrivent jusqu'au moteur. Un vol tiré au hasard ne peut pas s'en charger — il
  * ne sort pas à toutes les parties.
  */
@@ -159,7 +189,12 @@ async function checkSpicySurface(code) {
     targetIndex: 0,
   });
   const nothingToDecline = await refusal(code, A, { type: 'declineSteal' });
-  console.log(`  refus attendus : « ${notHost} » / « ${tooEarly} » / « ${nothingToDecline} »`);
+  const noSwapYet = await refusal(code, A, { type: 'swap', index: 0, otherIndex: 1 });
+  const nothingToRefuse = await refusal(code, A, { type: 'declineSwap' });
+  console.log(
+    `  refus attendus : « ${notHost} » / « ${tooEarly} » / « ${nothingToDecline} »` +
+      ` / « ${noSwapYet} » / « ${nothingToRefuse} »`,
+  );
 }
 
 async function playGame(variant) {
@@ -171,7 +206,14 @@ async function playGame(variant) {
   if (variant === 'spicy') await checkSpicySurface(code);
   seen = {
     versions: new Set(),
-    events: { stealDrawn: 0, stole: 0, stealDeclined: 0 },
+    events: {
+      stealDrawn: 0,
+      stole: 0,
+      stealDeclined: 0,
+      swapDrawn: 0,
+      swapped: 0,
+      swapDeclined: 0,
+    },
     jokerSeen: false,
   };
   const started = await act(code, A, { type: 'startGame' });
@@ -185,9 +227,10 @@ async function playGame(variant) {
       console.log(`fin de partie après ${state.round} manche(s) — ${winner.name} gagne`);
       console.log(state.players.map((p) => `${p.name}: ${p.totalScore}`).join(' · '));
       if (variant === 'spicy') {
-        const { stealDrawn, stole, stealDeclined } = seen.events;
+        const { stealDrawn, stole, stealDeclined, swapDrawn, swapped, swapDeclined } = seen.events;
         console.log(
           `  vus : ${stealDrawn} Vol (${stole} échangé(s), ${stealDeclined} refusé(s))` +
+            `, ${swapDrawn} Valse (${swapped} jouée(s), ${swapDeclined} refusée(s))` +
             `, joker ${seen.jokerSeen ? 'aperçu en grille' : 'jamais sorti'}`,
         );
       }

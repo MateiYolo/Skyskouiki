@@ -5,11 +5,14 @@ import {
   JOKER_VALUE,
   ROWS,
   STEAL_CARD,
+  SWAP_CARD,
   isJokerCard,
   isStealCard,
+  isSwapCard,
   type Cell,
   type GroupKind,
   type PileCard,
+  type SpecialCard,
   type ValueCard,
   type Variant,
 } from './types';
@@ -53,11 +56,21 @@ export const SPICY_COMPOSITION: ReadonlyArray<readonly [value: number, count: nu
  * Nombre de cartes Vol glissées dans la pioche en mode spicy.
  *
  * Quatre, parce qu'un Vol ne se déclenche qu'en étant *pioché* (cf.
- * `seedStealCards`) : ça fait environ un demi Vol par manche à deux joueurs et
+ * `seedSpecialCards`) : ça fait environ un demi Vol par manche à deux joueurs et
  * un peu plus d'un à quatre. Deux cartes ne sortiraient quasiment jamais, huit
  * feraient de l'échange le jeu principal.
  */
 export const STEAL_COUNT = 4;
+
+/**
+ * Nombre de cartes Valse glissées dans la pioche en mode spicy.
+ *
+ * Autant que de Vol, et pour la même arithmétique : une Valse ne se déclenche
+ * qu'en étant *piochée*, ce qui en fait environ une par manche. Elle est aussi
+ * la plus douce des deux — elle ne touche que sa propre grille — donc rien ne
+ * justifiait de la rendre plus rare que sa jumelle.
+ */
+export const SWAP_COUNT = 4;
 
 /**
  * Nombre de jokers du mode spicy.
@@ -99,6 +112,7 @@ export function buildDeck(variant: Variant = 'classic'): ValueCard[] {
 export function cardName(card: PileCard): string {
   if (isJokerCard(card)) return 'le joker';
   if (isStealCard(card)) return 'un Vol';
+  if (isSwapCard(card)) return 'une Valse';
   return String(card);
 }
 
@@ -142,24 +156,31 @@ export function setCellCard(cell: NonNullable<Cell>, card: ValueCard, faceUp = t
   else delete cell.joker;
 }
 
+/** Les cartes sans valeur que le mode spicy glisse dans la pioche. */
+export function spicySpecials(): SpecialCard[] {
+  return [
+    ...Array.from({ length: STEAL_COUNT }, (): SpecialCard => STEAL_CARD),
+    ...Array.from({ length: SWAP_COUNT }, (): SpecialCard => SWAP_CARD),
+  ];
+}
+
 /**
- * Glisse les cartes Vol dans la pioche, une fois les grilles distribuées.
+ * Glisse les cartes sans valeur — Vol et Valse — dans la pioche, une fois les
+ * grilles distribuées.
  *
- * Une carte Vol ne porte pas de valeur : elle n'a donc pas de place dans une
- * grille, et c'est ce qui permet de l'ajouter sans toucher au comptage ni aux
+ * Aucune des deux ne porte de valeur : elles n'ont donc pas de place dans une
+ * grille, et c'est ce qui permet de les ajouter sans toucher au comptage ni aux
  * éliminations. La conséquence est une règle de jeu à part entière, pas un
- * détail d'implémentation — **un Vol ne se déclenche que si quelqu'un pioche**,
- * jamais en étant distribué. C'est ce qui fixe sa fréquence, et donc son
- * dosage (cf. `STEAL_COUNT`).
+ * détail d'implémentation — **elles ne se déclenchent que si quelqu'un
+ * pioche**, jamais en étant distribuées. C'est ce qui fixe leur fréquence, et
+ * donc leur dosage (cf. `STEAL_COUNT`, `SWAP_COUNT`).
  */
-export function seedStealCards(
+export function seedSpecialCards(
   pile: readonly ValueCard[],
-  count: number,
+  specials: readonly SpecialCard[],
   seed: number,
 ): { pile: PileCard[]; seed: number } {
-  const mixed: PileCard[] = [...pile];
-  for (let i = 0; i < count; i++) mixed.push(STEAL_CARD);
-  const { items, seed: next } = shuffle(mixed, seed);
+  const { items, seed: next } = shuffle([...pile, ...specials], seed);
   return { pile: items, seed: next };
 }
 
