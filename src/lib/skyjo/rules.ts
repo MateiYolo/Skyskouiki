@@ -279,30 +279,42 @@ export interface ClearedGroup {
  * (règle officielle) et les lignes entièrement homogènes (règle maison). Les
  * cartes partent à la défausse et ne comptent plus.
  *
- * Les groupes sont d'abord repérés sur la grille intacte, puis retirés d'un
- * bloc : sinon, vider une ligne en premier empêcherait une colonne qui la
- * croise d'être reconnue.
+ * Au sein d'une même passe, les groupes sont d'abord repérés sur la grille
+ * intacte, puis retirés d'un bloc : sinon, vider une ligne en premier
+ * empêcherait une colonne qui la croise d'être reconnue.
+ *
+ * Puis on recommence, car une élimination peut en découvrir une autre : une
+ * ligne de quatre dont une carte dépareille reste bloquée tant que cette carte
+ * est là, mais si la colonne qui la porte s'en va, la ligne devient un groupe
+ * de trois homogène (cf. `MIN_GROUP`) et doit partir à son tour. Chaque passe
+ * retire au moins une carte, donc la boucle s'arrête.
  *
  * Mute `grid` et `discardPile`.
  */
 export function clearGroups(grid: Cell[], discardPile: ValueCard[]): ClearedGroup[] {
-  const found: ClearedGroup[] = [];
+  const all: ClearedGroup[] = [];
 
-  const collect = (kind: GroupKind, index: number, indices: number[]) => {
-    const value = uniformValue(grid, indices);
-    if (value === null) return;
-    const cells = indices.filter((i) => grid[i] !== null);
-    found.push({ kind, index, value, cells, jokers: cells.filter((i) => grid[i]!.joker) });
-  };
+  for (;;) {
+    const found: ClearedGroup[] = [];
 
-  for (let col = 0; col < COLS; col++) collect('column', col, columnIndices(col));
-  for (let row = 0; row < ROWS; row++) collect('row', row, rowIndices(row));
+    const collect = (kind: GroupKind, index: number, indices: number[]) => {
+      const value = uniformValue(grid, indices);
+      if (value === null) return;
+      const cells = indices.filter((i) => grid[i] !== null);
+      found.push({ kind, index, value, cells, jokers: cells.filter((i) => grid[i]!.joker) });
+    };
 
-  for (const i of new Set(found.flatMap((group) => group.cells))) {
-    // Le joker repart à la défausse en joker : il continue de circuler.
-    discardPile.push(cellToCard(grid[i]!));
-    grid[i] = null;
+    for (let col = 0; col < COLS; col++) collect('column', col, columnIndices(col));
+    for (let row = 0; row < ROWS; row++) collect('row', row, rowIndices(row));
+
+    if (found.length === 0) return all;
+
+    for (const i of new Set(found.flatMap((group) => group.cells))) {
+      // Le joker repart à la défausse en joker : il continue de circuler.
+      discardPile.push(cellToCard(grid[i]!));
+      grid[i] = null;
+    }
+
+    all.push(...found);
   }
-
-  return found;
 }
