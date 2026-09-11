@@ -16,14 +16,15 @@ import {
   jokerReturnDepth,
   nextRandom,
   returnToDrawPile,
-  seedStealCards,
+  seedSpecialCards,
   shuffle,
-  STEAL_COUNT,
+  spicySpecials,
 } from './rules';
 import {
   GRID_SIZE,
   JOKER_CARD,
   isStealCard,
+  isSwapCard,
   type Action,
   type ActionResult,
   type Cell,
@@ -203,6 +204,14 @@ export function applyAction(input: GameState, action: Action): ActionResult {
         events.push({ type: 'stealDrawn', playerId: action.playerId });
         return commit();
       }
+      // Même nature, même traitement : la Valse se résout elle aussi
+      // sur-le-champ, à ceci près qu'elle ne regarde que la grille de celui
+      // qui l'a tirée.
+      if (isSwapCard(card)) {
+        s.turnStep = 'swapping';
+        events.push({ type: 'swapDrawn', playerId: action.playerId });
+        return commit();
+      }
       s.heldCard = card;
       s.heldFrom = 'draw';
       s.turnStep = 'holding';
@@ -329,16 +338,59 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       return commit();
     }
 
-    case 'declineSteal': {
-      const err = requireTurn(s, action.playerId, 'stealing');
+    // -- Valse (mode spicy) --------------------------------------------------
+    case 'swap': {
+      const err = requireTurn(s, action.playerId, 'swapping');
       if (err) return fail(err);
       const player = s.players[s.currentPlayerIndex];
-      events.push({ type: 'stealDeclined', playerId: player.id });
-      // Renoncer coûte un retournement, exactement comme jeter une carte
-      // piochée. Sans ce prix, refuser serait toujours le bon coup quand
-      // l'échange ne rapporte rien — et la carte perdrait tout son tranchant.
-      // Reste le cas du joueur qui n'a plus rien à retourner : il n'y a alors
-      // rien à payer, et son tour s'arrête là.
+      if (action.index === action.otherIndex) return fail('Choisis deux cartes différentes.');
+      const first = cellAt(player.grid, action.index);
+      const second = cellAt(player.grid, action.otherIndex);
+      if (!first || !second) return fail('Case invalide.');
+
+      // Les deux cases échangent leur carte entière, face comprise — exactement
+      // comme un Vol, et pour la même raison : ce qui était sur la table reste
+      // connu, ce qui était sur le dos le reste aussi. Déplacer un dos ne le
+      // retourne pas, et le nombre de cartes cachées ne bouge donc jamais.
+      const firstCard = cellToCard(first);
+      const secondCard = cellToCard(second);
+      const firstUp = first.faceUp;
+      const secondUp = second.faceUp;
+      setCellCard(first, secondCard, secondUp);
+      setCellCard(second, firstCard, firstUp);
+      events.push({
+        type: 'swapped',
+        playerId: player.id,
+        index: action.index,
+        otherIndex: action.otherIndex,
+        first: firstUp ? firstCard : null,
+        second: secondUp ? secondCard : null,
+      });
+      // Tout l'intérêt de la carte : la valeur qui manquait à une colonne peut
+      // enfin la rejoindre depuis l'autre bout de la grille.
+      resolveGroups(s, player, events);
+      endTurn(s, events);
+      return commit();
+    }
+
+    // -- Renoncer à une carte spéciale (mode spicy) --------------------------
+    //
+    // Le Vol et la Valse se refusent de la même façon, et au même prix : un
+    // retournement, exactement comme jeter une carte piochée. Sans ce prix,
+    // refuser serait toujours le bon coup quand l'échange ne rapporte rien — et
+    // les deux cartes perdraient tout leur tranchant. Reste le cas du joueur
+    // qui n'a plus rien à retourner : il n'y a alors rien à payer, et son tour
+    // s'arrête là.
+    case 'declineSteal':
+    case 'declineSwap': {
+      const refused =
+        action.type === 'declineSteal'
+          ? { step: 'stealing' as const, event: 'stealDeclined' as const }
+          : { step: 'swapping' as const, event: 'swapDeclined' as const };
+      const err = requireTurn(s, action.playerId, refused.step);
+      if (err) return fail(err);
+      const player = s.players[s.currentPlayerIndex];
+      events.push({ type: refused.event, playerId: player.id });
       if (countFaceDown(player.grid) > 0) {
         s.turnStep = 'mustFlip';
         return commit();
@@ -387,6 +439,8 @@ function requireTurn(s: GameState, playerId: string, step: GameState['turnStep']
     if (s.turnStep === 'mustFlip') return 'Tu dois retourner une carte face cachée.';
     if (s.turnStep === 'holding') return 'Tu as déjà une carte en main.';
     if (s.turnStep === 'stealing') return 'Tu tiens un Vol : désigne l’échange, ou renonce.';
+    if (s.turnStep === 'swapping')
+      return 'Tu tiens une Valse : désigne tes deux cartes, ou renonce.';
     return 'Action impossible maintenant.';
   }
   return null;
@@ -402,10 +456,10 @@ function dealRound(s: GameState, events: GameEvent[]) {
     p.grid = Array.from({ length: GRID_SIZE }, () => cardToCell(deck.pop()!));
   }
   s.discardPile = [deck.pop()!];
-  // Les Vol n'entrent en jeu qu'ici, les grilles déjà servies : c'est ce qui
-  // garantit qu'ils ne peuvent être que dans la pioche.
+  // Les Vol et les Valse n'entrent en jeu qu'ici, les grilles déjà servies :
+  // c'est ce qui garantit qu'ils ne peuvent être que dans la pioche.
   if (variant === 'spicy') {
-    const seeded = seedStealCards(deck, STEAL_COUNT, s.seed);
+    const seeded = seedSpecialCards(deck, spicySpecials(), s.seed);
     s.drawPile = seeded.pile;
     s.seed = seeded.seed;
   } else {

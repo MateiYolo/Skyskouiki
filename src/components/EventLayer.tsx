@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { cue } from '@/lib/client/feedback';
 import { clearDelay } from '@/lib/client/flights';
 import { FLIGHT_DURATION, FLIGHT_NEXT, MOVE, SETTLE } from '@/lib/client/motion';
-import { cardName } from '@/lib/skyjo';
+import { cardName, swappedPair } from '@/lib/skyjo';
 import type { GameEvent, GameView } from '@/lib/skyjo';
 
 /**
@@ -156,6 +156,58 @@ export function EventLayer({ view }: { view: GameView }) {
           fresh.push({
             id: nextId++,
             text: mine(event.playerId) ? 'Vol laissé de côté' : `${nameOf(event.playerId)} renonce au Vol`,
+            tone: 'neutral',
+          });
+          break;
+
+        // La Valse s'annonce comme le Vol, en deux temps — mais elle ne
+        // menace personne : pas d'alerte rouge sur l'écran d'en face, juste de
+        // quoi comprendre pourquoi le tour s'arrête et pourquoi deux cartes
+        // viennent de changer de place.
+        case 'swapDrawn':
+          cue('swap');
+          freshHero = mine(event.playerId)
+            ? {
+                id: nextId++,
+                title: 'Valse !',
+                subtitle: 'Intervertis deux de tes cartes, dos compris',
+                tone: 'good',
+                hold: 2800,
+              }
+            : {
+                id: nextId++,
+                title: 'Valse !',
+                subtitle: `${nameOf(event.playerId)} réarrange sa grille`,
+                tone: 'warn',
+                hold: 2800,
+              };
+          break;
+        case 'swapped': {
+          // Les deux cartes se croisent d'abord, puis se posent : même horloge
+          // que le Vol, puisque c'est le même mouvement.
+          cue('swap', FLIGHT_NEXT + FLIGHT_DURATION);
+          const pair = swappedPair(event.first, event.second);
+          freshHero = mine(event.playerId)
+            ? {
+                id: nextId++,
+                title: 'Cartes interverties',
+                subtitle: `Tu échanges ${pair}`,
+                tone: 'good',
+              }
+            : {
+                id: nextId++,
+                title: 'Valse',
+                subtitle: `${nameOf(event.playerId)} intervertit ${pair}`,
+                tone: 'warn',
+              };
+          break;
+        }
+        case 'swapDeclined':
+          fresh.push({
+            id: nextId++,
+            text: mine(event.playerId)
+              ? 'Valse laissée de côté'
+              : `${nameOf(event.playerId)} renonce à la Valse`,
             tone: 'neutral',
           });
           break;

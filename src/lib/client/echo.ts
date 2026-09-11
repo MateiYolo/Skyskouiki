@@ -21,8 +21,14 @@ import type { ClearEcho } from '@/components/PlayerGrid';
 export interface MoveEcho {
   /** Version de la partie : sert de clé pour rejouer l'animation à chaque coup. */
   version: number;
-  /** Par joueur, la case qu'il vient de jouer. */
-  touched: Record<string, number>;
+  /**
+   * Par joueur, la ou les cases qu'il vient de jouer.
+   *
+   * Une seule suffisait tant qu'un coup ne touchait qu'une carte par grille.
+   * La Valse en bouge deux d'un coup, dans la même grille : n'en désigner
+   * qu'une ferait croire que l'autre n'a pas bougé.
+   */
+  touched: Record<string, number | number[]>;
   /** Par joueur, le groupe qu'il vient d'éliminer. */
   cleared: Record<string, ClearEcho>;
   /** Pile où la dernière carte a été prise : elle s'allume au passage. */
@@ -41,7 +47,7 @@ export function useMoveEcho(view: GameView | null): MoveEcho | null {
     seen.current = view.version;
     if (firstRender) return;
 
-    const touched: Record<string, number> = {};
+    const touched: Record<string, number | number[]> = {};
     const cleared: Record<string, ClearEcho> = {};
     let drewFrom: 'draw' | 'discard' | null = null;
 
@@ -57,6 +63,10 @@ export function useMoveEcho(view: GameView | null): MoveEcho | null {
         case 'stole':
           touched[event.playerId] = event.index;
           touched[event.targetPlayerId] = event.targetIndex;
+          break;
+        // Une Valse, elle, touche deux cases d'une seule grille.
+        case 'swapped':
+          touched[event.playerId] = [event.index, event.otherIndex];
           break;
         case 'drew':
           drewFrom = event.from;

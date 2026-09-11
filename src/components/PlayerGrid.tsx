@@ -48,16 +48,18 @@ export interface PlayerGridProps {
    */
   markTargets?: boolean;
   onCell?: (index: number) => void;
-  /** Case jouée au dernier coup. */
-  touched?: number | null;
+  /** Case (ou cases, pour une Valse) jouée au dernier coup. */
+  touched?: number | readonly number[] | null;
   /**
    * Case retenue par le joueur, en attente du second geste.
    *
-   * Un seul coup en a besoin : le Vol se joue en deux taps — ma carte, puis la
-   * sienne — et sans marque il n'y a aucun moyen de savoir ce qu'on a déjà
-   * désigné entre les deux.
+   * Deux coups en ont besoin : le Vol et la Valse se jouent en deux taps — une
+   * carte, puis l'autre — et sans marque il n'y a aucun moyen de savoir ce
+   * qu'on a déjà désigné entre les deux.
    */
   selected?: number | null;
+  /** La couleur de cette marque : celle de la carte qui a lancé l'échange. */
+  selectedTone?: SelectedTone;
   /** Groupe éliminé au dernier coup. */
   cleared?: ClearEcho | null;
   /** Version de la partie : remonte les échos à chaque nouveau coup. */
@@ -86,23 +88,31 @@ function TouchedRing({ radius }: { radius: string }) {
   );
 }
 
+/** Les deux couleurs d'échange, et leur halo. */
+const SELECTED_TONE = {
+  steal: { color: 'var(--color-steal)', glow: 'rgb(233 78 192 / 0.55)' },
+  swap: { color: 'var(--color-swap)', glow: 'rgb(47 224 194 / 0.5)' },
+} as const;
+
+export type SelectedTone = keyof typeof SELECTED_TONE;
+
 /**
  * La carte que je viens de désigner, et qui attend le second geste.
  *
  * Le léger agrandissement que porte déjà `PlayingCard` ne suffit pas ici : les
  * autres cartes visibles restent des cibles légitimes — on peut changer d'avis
  * — donc elles gardent toutes leur liseré, et la seule différence était quatre
- * pour cent de taille. Le liseré prend la couleur du Vol : magenta dans la
- * main, magenta sur ma carte, magenta sur la grille d'en face. Trois fois la
- * même couleur pour un seul échange.
+ * pour cent de taille. Le liseré prend donc la couleur de la carte qui a
+ * déclenché l'échange : magenta dans la main, magenta sur ma carte, magenta
+ * sur la grille d'en face pour un Vol ; turquoise de bout en bout pour une
+ * Valse. Une seule couleur par échange, du début à la fin.
  */
-function SelectedRing({ radius }: { radius: string }) {
+function SelectedRing({ radius, tone }: { radius: string; tone: SelectedTone }) {
+  const { color, glow } = SELECTED_TONE[tone];
   return (
     <span
       className={`pointer-events-none absolute -inset-[3px] ${radius}`}
-      style={{
-        boxShadow: '0 0 0 2.5px var(--color-steal), 0 0 18px rgb(233 78 192 / 0.55)',
-      }}
+      style={{ boxShadow: `0 0 0 2.5px ${color}, 0 0 18px ${glow}` }}
       aria-hidden
     />
   );
@@ -171,6 +181,7 @@ const GridCell = memo(function GridCell({
   marked,
   touched,
   selected,
+  selectedTone,
   echoKey,
   turning,
   anchor,
@@ -188,6 +199,7 @@ const GridCell = memo(function GridCell({
   marked: boolean;
   touched: boolean;
   selected: boolean;
+  selectedTone: SelectedTone;
   echoKey: number;
   turning: boolean;
   anchor: string | undefined;
@@ -205,7 +217,7 @@ const GridCell = memo(function GridCell({
       selected={selected}
       overlay={
         selected ? (
-          <SelectedRing radius={radius} />
+          <SelectedRing radius={radius} tone={selectedTone} />
         ) : touched ? (
           <TouchedRing key={echoKey} radius={radius} />
         ) : undefined
@@ -224,6 +236,7 @@ export const PlayerGrid = memo(function PlayerGrid({
   onCell,
   touched = null,
   selected = null,
+  selectedTone = 'steal',
   cleared = null,
   echoKey = 0,
   revealing,
@@ -232,6 +245,8 @@ export const PlayerGrid = memo(function PlayerGrid({
   const gap = size === 'xs' ? 'gap-[2px]' : size === 'sm' ? 'gap-1' : 'gap-1.5';
   const radius = size === 'xs' ? 'rounded-[4px]' : size === 'sm' ? 'rounded-lg' : 'rounded-xl';
   const clearing = cleared ? new Set(cleared.indices) : null;
+  // Une case, deux cases ou aucune : la grille ne fait que les cercler.
+  const touchedCells = touched === null ? null : typeof touched === 'number' ? [touched] : touched;
 
   return (
     <div className={`grid h-full grid-cols-4 grid-rows-3 ${gap}`}>
@@ -270,8 +285,9 @@ export const PlayerGrid = memo(function PlayerGrid({
             radius={radius}
             playable={isTarget?.(index) ?? false}
             marked={markTargets}
-            touched={touched === index}
+            touched={touchedCells?.includes(index) ?? false}
             selected={selected === index}
+            selectedTone={selectedTone}
             echoKey={echoKey}
             turning={revealing?.includes(index) ?? false}
             anchor={playerId ? cellAnchor(playerId, index) : undefined}

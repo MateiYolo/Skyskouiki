@@ -43,6 +43,9 @@ export const actionSchema = z.discriminatedUnion('type', [
     targetIndex: gridIndex,
   }),
   z.object({ type: z.literal('declineSteal') }),
+  // La Valse ne quitte jamais ma grille : deux index, et rien d'autre à borner.
+  z.object({ type: z.literal('swap'), index: gridIndex, otherIndex: gridIndex }),
+  z.object({ type: z.literal('declineSwap') }),
   z.object({ type: z.literal('nextRound') }),
   z.object({ type: z.literal('playAgain') }),
 ]);

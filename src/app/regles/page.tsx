@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { PlayingCard } from '@/components/PlayingCard';
-import { JOKER_CARD, STEAL_CARD } from '@/lib/skyjo';
+import { JOKER_CARD, STEAL_CARD, SWAP_CARD } from '@/lib/skyjo';
 
 export const metadata: Metadata = {
   title: 'Règles · Skouikjo',
@@ -64,7 +64,7 @@ export default function RulesPage() {
       <h1 className="text-3xl font-black tracking-tight">Les règles</h1>
       <p className="mt-2 text-sm text-ink-dim">
         Celles du jeu original, plus deux règles maison — signalées là où elles s’appliquent. But
-        du jeu&nbsp;: avoir le plus petit total. Les trois dernières sections ne valent que pour le{' '}
+        du jeu&nbsp;: avoir le plus petit total. Les quatre dernières sections ne valent que pour le{' '}
         <Key>mode spicy</Key>, qui se choisit dans le salon avant de lancer la partie.
       </p>
 
@@ -201,13 +201,13 @@ export default function RulesPage() {
 
       <Section n="11" title="Le mode spicy" spicy>
         <p>
-          Trois cartes en plus dans le paquet, et rien d’autre&nbsp;: le tour de jeu, les colonnes,
+          Quatre cartes en plus dans le paquet, et rien d’autre&nbsp;: le tour de jeu, les colonnes,
           les lignes, le comptage et la pénalité de fermeture ne changent pas d’une virgule. L’hôte
           le choisit <Key>dans le salon</Key>, avant de distribuer&nbsp;; ensuite c’est figé pour
           toute la partie.
         </p>
         <div className="flex gap-2 pt-1">
-          {([-5, JOKER_CARD, STEAL_CARD] as const).map((card) => (
+          {([-5, JOKER_CARD, STEAL_CARD, SWAP_CARD] as const).map((card) => (
             <div key={String(card)} className="w-11">
               <PlayingCard value={card} faceUp size="sm" />
             </div>
@@ -282,8 +282,39 @@ export default function RulesPage() {
         </p>
       </Section>
 
+      <Section n="14" title="La carte Valse" spicy>
+        <p>
+          <Key>Quatre cartes Valse</Key> complètent la pioche, et comme le Vol elles n’existent{' '}
+          <Key>que là</Key>&nbsp;: une Valse ne se déclenche que si tu la pioches.
+        </p>
+        <p>
+          Elle ne touche <Key>que ta grille</Key>&nbsp;: tu désignes deux de tes cartes, et elles{' '}
+          <Key>échangent leur place</Key>. Visible ou cachée, peu importe — de chaque côté.
+        </p>
+        <p>
+          C’est la seule carte du jeu qui déplace ce que tu as déjà. Le 7 coincé en bas à droite
+          pendant que deux autres 7 attendent dans la colonne d’à côté n’avait jusque-là aucun moyen
+          de les rejoindre&nbsp;: il fallait en repiocher un troisième. Là, tu le déménages, et{' '}
+          <Key>la colonne saute</Key>.
+        </p>
+        <p>
+          La carte garde sa face en changeant de case&nbsp;: un dos reste un dos. Ton nombre de
+          cartes cachées ne bouge donc pas d’une Valse — <Key>rien ne se révèle</Key>, rien ne se
+          compte différemment. Ton total non plus, d’ailleurs&nbsp;: ce sont les éliminations
+          qu’elle rend possibles qui le font baisser.
+        </p>
+        <p>
+          Et déplacer deux dos est un vrai coup&nbsp;: tu ne sais pas ce que tu déménages, mais tu
+          sais <Key>où</Key>.
+        </p>
+        <p>
+          Comme pour le Vol, tu peux <Key>renoncer</Key>&nbsp;: ça coûte un retournement, puis la
+          carte quitte la manche.
+        </p>
+      </Section>
+
       <p className="border-t border-white/10 pt-6 text-xs leading-relaxed text-ink-faint">
-        Le mode spicy n’a rien d’officiel non plus&nbsp;: ces trois cartes n’existent pas dans la
+        Le mode spicy n’a rien d’officiel non plus&nbsp;: ces quatre cartes n’existent pas dans la
         boîte. Skyjo est un jeu de Magilano. Skouikjo est une implémentation personnelle de ses règles,
         sans lien avec l’éditeur, faite pour jouer à deux sur nos téléphones.
       </p>

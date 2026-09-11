@@ -43,6 +43,8 @@ export type LegalAction =
   | 'flipCard'
   | 'steal'
   | 'declineSteal'
+  | 'swap'
+  | 'declineSwap'
   | 'startGame'
   | 'setVariant'
   | 'nextRound'
@@ -179,6 +181,17 @@ function canSteal(state: GameState, me: Player): boolean {
   return state.players.some((p) => p.id !== me.id && holdsCard(p));
 }
 
+/**
+ * Vrai si une Valse est jouable : il faut deux cartes à intervertir.
+ *
+ * Une grille réduite à une seule carte par ses éliminations n'a rien à
+ * réarranger — et on se retrouverait avec une Valse en main et une seule case
+ * à désigner.
+ */
+function canSwap(me: Player): boolean {
+  return me.grid.filter((cell) => cell !== null).length >= 2;
+}
+
 export function legalActionsFor(state: GameState, viewerId: string): LegalAction[] {
   const me = state.players.find((p) => p.id === viewerId);
   if (!me) return [];
@@ -208,6 +221,9 @@ export function legalActionsFor(state: GameState, viewerId: string): LegalAction
       // peut pas bloquer un tour, même sans cible.
       if (state.turnStep === 'stealing') {
         return canSteal(state, me) ? ['steal', 'declineSteal'] : ['declineSteal'];
+      }
+      if (state.turnStep === 'swapping') {
+        return canSwap(me) ? ['swap', 'declineSwap'] : ['declineSwap'];
       }
       return ['flipCard'];
     case 'roundOver':

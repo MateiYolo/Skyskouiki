@@ -28,8 +28,8 @@ export type GroupKind = 'column' | 'row';
  * Le mode de jeu, choisi dans le salon.
  *
  * `spicy` n'ajoute rien au tour de jeu : il change la composition du paquet
- * (deux -5) et y glisse quatre cartes Vol. Tout le reste — colonnes, lignes,
- * comptage, pénalité de fermeture — est identique.
+ * (deux -5, un joker) et y glisse quatre cartes Vol et quatre Valse. Tout le
+ * reste — colonnes, lignes, comptage, pénalité de fermeture — est identique.
  */
 export type Variant = 'classic' | 'spicy';
 
@@ -43,6 +43,23 @@ export type Variant = 'classic' | 'spicy';
  */
 export const STEAL_CARD = 'steal';
 export type StealCard = typeof STEAL_CARD;
+
+/**
+ * La carte Valse.
+ *
+ * La jumelle du Vol, tournée vers l'intérieur : elle intervertit deux cases de
+ * *sa propre* grille. Même nature, donc — pas de valeur, une vie entière dans
+ * la pioche, une résolution au moment où on la tire — et pour la même raison :
+ * une carte qui n'a rien à compter ne peut pas dormir dans une grille.
+ *
+ * Ce qu'elle apporte, aucune autre carte du paquet ne le fait : jusqu'ici, une
+ * carte tombée au mauvais endroit y restait. Le 7 qui aurait fermé la colonne
+ * d'à côté n'avait aucun moyen de la rejoindre — il fallait en repiocher un
+ * autre. La Valse déplace ce qu'on a déjà, et fait donc du rangement de sa
+ * grille un coup à part entière.
+ */
+export const SWAP_CARD = 'swap';
+export type SwapCard = typeof SWAP_CARD;
 
 /**
  * Le joker (mode spicy, un seul exemplaire).
@@ -61,17 +78,27 @@ export const JOKER_VALUE = 0;
 /**
  * Une carte qui a une valeur au comptage : un nombre, ou le joker.
  *
- * C'est ce qui circule dans la défausse et se tient en main. Le Vol, lui, n'en
- * fait pas partie : il n'a rien à compter et ne peut donc apparaître nulle part
- * ailleurs que dans la pioche.
+ * C'est ce qui circule dans la défausse et se tient en main. Le Vol et la
+ * Valse, eux, n'en font pas partie : ils n'ont rien à compter et ne peuvent
+ * donc apparaître nulle part ailleurs que dans la pioche.
  */
 export type ValueCard = number | JokerCard;
 
-/** Ce qu'une pioche peut contenir : les cartes à valeur, plus les Vol (spicy). */
-export type PileCard = ValueCard | StealCard;
+/**
+ * Les cartes sans valeur du mode spicy : elles ne vivent que dans la pioche et
+ * se résolvent à l'instant où on les tire.
+ */
+export type SpecialCard = StealCard | SwapCard;
+
+/** Ce qu'une pioche peut contenir : les cartes à valeur, plus les spéciales (spicy). */
+export type PileCard = ValueCard | SpecialCard;
 
 export function isStealCard(card: PileCard): card is StealCard {
   return card === STEAL_CARD;
+}
+
+export function isSwapCard(card: PileCard): card is SwapCard {
+  return card === SWAP_CARD;
 }
 
 export function isJokerCard(card: PileCard): card is JokerCard {
@@ -94,7 +121,9 @@ export type TurnStep =
   /** Le joueur a défaussé la carte piochée : il doit retourner une carte face cachée. */
   | 'mustFlip'
   /** Mode spicy : le joueur a pioché un Vol et doit désigner l'échange (ou y renoncer). */
-  | 'stealing';
+  | 'stealing'
+  /** Mode spicy : le joueur a pioché une Valse et doit désigner ses deux cases (ou y renoncer). */
+  | 'swapping';
 
 export interface Player {
   id: string;
@@ -161,6 +190,27 @@ export type GameEvent =
       given: ValueCard | null;
     }
   | { type: 'stealDeclined'; playerId: string }
+  /** Mode spicy : une Valse vient d'être piochée ; son porteur doit désigner ses deux cases. */
+  | { type: 'swapDrawn'; playerId: string }
+  | {
+      type: 'swapped';
+      playerId: string;
+      /** Première case désignée : elle contient désormais `second`. */
+      index: number;
+      /** Seconde case : elle contient désormais `first`. */
+      otherIndex: number;
+      /**
+       * La carte qui occupait `index`, ou `null` si elle était face cachée.
+       *
+       * Comme pour le Vol, l'événement part à tous les écrans : deux dos qui
+       * changent de place ne doivent rien apprendre à personne, pas même à
+       * celui qui les déplace.
+       */
+      first: ValueCard | null;
+      /** La carte qui occupait `otherIndex`, ou `null` si elle était face cachée. */
+      second: ValueCard | null;
+    }
+  | { type: 'swapDeclined'; playerId: string }
   | { type: 'lastTurnTriggered'; playerId: string }
   | { type: 'roundOver'; scores: RoundScore[] }
   | { type: 'gameOver'; winnerId: string };
@@ -256,6 +306,9 @@ export type Action =
       targetIndex: number;
     }
   | { type: 'declineSteal'; playerId: string }
+  /** Mode spicy : intervertit deux cartes de ma propre grille. */
+  | { type: 'swap'; playerId: string; index: number; otherIndex: number }
+  | { type: 'declineSwap'; playerId: string }
   | { type: 'nextRound'; playerId: string }
   | { type: 'playAgain'; playerId: string };
 

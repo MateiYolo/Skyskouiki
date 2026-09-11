@@ -43,7 +43,7 @@ export interface FlightRequest {
   to: string;
   /**
    * `null` = carte face cachée : on sait qu'elle bouge, pas ce qu'elle vaut.
-   * Un Vol peut voler lui aussi, de la pioche jusqu'à la main.
+   * Un Vol ou une Valse peuvent voler eux aussi, de la pioche jusqu'à la main.
    */
   value: PileCard | null;
   delay: number;
@@ -112,29 +112,29 @@ function swap(cell: string, arriving: ValueCard, leaving: ValueCard | null): Fli
 }
 
 /**
- * Un vol : deux cartes qui se croisent entre deux grilles.
+ * Deux cartes qui se croisent : un vol entre deux grilles, une Valse dans la
+ * sienne.
  *
  * Même principe que `swap`, en double. Chaque case garde un instant la carte
  * qui la quitte — la grille affiche déjà celle qui arrive — puis les deux
  * partent en même temps, chacune vers la case de l'autre. C'est le seul
- * mouvement du jeu qui traverse le terrain dans les deux sens à la fois, et
- * c'est exactement ce qu'un vol est.
+ * mouvement du jeu qui va dans les deux sens à la fois, et c'est exactement ce
+ * que ces deux cartes font.
  *
  * Une carte face cachée voyage sur son dos (`value: null`) : elle change de
- * grille sans se retourner, et le trajet ne doit pas en dire plus que la
- * table.
+ * case sans se retourner, et le trajet ne doit pas en dire plus que la table.
  */
 function cross(
-  thiefCell: string,
-  victimCell: string,
-  given: ValueCard | null,
-  taken: ValueCard | null,
+  hereCell: string,
+  thereCell: string,
+  leaving: ValueCard | null,
+  arriving: ValueCard | null,
 ): FlightRequest[] {
   return [
-    { from: thiefCell, to: thiefCell, value: given, delay: 0, hold: FLIGHT_NEXT },
-    { from: victimCell, to: victimCell, value: taken, delay: 0, hold: FLIGHT_NEXT },
-    { from: thiefCell, to: victimCell, value: given, delay: FLIGHT_NEXT },
-    { from: victimCell, to: thiefCell, value: taken, delay: FLIGHT_NEXT },
+    { from: hereCell, to: hereCell, value: leaving, delay: 0, hold: FLIGHT_NEXT },
+    { from: thereCell, to: thereCell, value: arriving, delay: 0, hold: FLIGHT_NEXT },
+    { from: hereCell, to: thereCell, value: leaving, delay: FLIGHT_NEXT },
+    { from: thereCell, to: hereCell, value: arriving, delay: FLIGHT_NEXT },
   ];
 }
 
@@ -202,9 +202,10 @@ function settledAt(view: GameView): number {
         at(FLIGHT_DURATION);
         break;
       case 'placed':
-      // Un vol peut fermer une colonne — des deux côtés. Les cartes du groupe
-      // ne partent donc qu'une fois le croisement posé.
+      // Un vol comme une Valse peuvent fermer une colonne. Les cartes du
+      // groupe ne partent donc qu'une fois le croisement posé.
       case 'stole':
+      case 'swapped':
         at(FLIGHT_NEXT + FLIGHT_DURATION);
         break;
       case 'flipped':
@@ -363,6 +364,19 @@ export function flightsForEvents(
             cellAnchor(event.targetPlayerId, event.targetIndex),
             event.given,
             event.taken,
+          ),
+        );
+        break;
+      // La Valse se rejoue pour tout le monde elle aussi, et pour la même
+      // raison : rien n'en était connu avant la réponse du serveur. Les deux
+      // cartes se croisent, mais dans une seule grille.
+      case 'swapped':
+        out.push(
+          ...cross(
+            cellAnchor(event.playerId, event.index),
+            cellAnchor(event.playerId, event.otherIndex),
+            event.first,
+            event.second,
           ),
         );
         break;

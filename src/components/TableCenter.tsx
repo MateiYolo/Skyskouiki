@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { PlayingCard } from './PlayingCard';
 import { DISCARD_PILE, DRAW_PILE, HAND } from '@/lib/client/flights';
 import { FLIGHT_DURATION, MOVE, SETTLE } from '@/lib/client/motion';
-import { STEAL_CARD, type PileCard, type ValueCard } from '@/lib/skyjo';
+import { STEAL_CARD, SWAP_CARD, type PileCard, type ValueCard } from '@/lib/skyjo';
 
 /**
  * Le milieu de la table : la consigne, les deux piles, et la carte en main.
@@ -61,6 +61,13 @@ export interface TableCenterProps {
    * la pioche n'a rien donné.
    */
   stealing: boolean;
+  /**
+   * Une Valse est en jeu : son porteur choisit les deux cases à intervertir.
+   *
+   * Même place et même raison que le Vol : la carte est sortie de la pioche, et
+   * le créneau du milieu doit le montrer même si rien ne se tient en main.
+   */
+  swapping: boolean;
   /** Ce que fait l'adversaire quand c'est lui qui tient la carte. */
   heldNote: string | null;
   /** À qui est la carte posée au milieu. */
@@ -72,7 +79,10 @@ export interface TableCenterProps {
   canDraw: boolean;
   canTakeDiscard: boolean;
   canDiscardHeld: boolean;
-  /** C'est à moi de résoudre un Vol : je peux y renoncer, au prix d'un retournement. */
+  /**
+   * C'est à moi de résoudre un Vol ou une Valse : je peux y renoncer, au prix
+   * d'un retournement.
+   */
   canDecline: boolean;
   onDraw: () => void;
   onTakeDiscard: () => void;
@@ -123,6 +133,7 @@ export const TableCenter = memo(function TableCenter({
   heldCard,
   heldFrom,
   stealing,
+  swapping,
   heldNote,
   holder,
   drewFrom,
@@ -136,7 +147,11 @@ export const TableCenter = memo(function TableCenter({
   onDiscardHeld,
   onDecline,
 }: TableCenterProps) {
-  const holding = heldFrom !== null || stealing;
+  // Les deux cartes spéciales occupent le créneau de la carte en main : c'est
+  // la même place dans le tour, et la même question — qu'est-ce que celui qui
+  // l'a piochée va en faire.
+  const special = stealing || swapping;
+  const holding = heldFrom !== null || special;
   /**
    * Jeter, c'est poser la carte sur la défausse — alors on rend la défausse
    * elle-même touchable. C'est le geste de la vraie table, et la cible fait la
@@ -148,9 +163,9 @@ export const TableCenter = memo(function TableCenter({
   // elle qui explique pourquoi l'adversaire pose ici plutôt que là. Elle reste
   // face cachée le temps d'un aller-retour quand c'est moi qui viens de
   // piocher — le serveur ne me l'a pas encore dite.
-  const heldVisible = stealing || heldCard !== null;
+  const heldVisible = special || heldCard !== null;
   /**
-   * Pendant un Vol, les deux piles se taisent.
+   * Pendant un Vol ou une Valse, les deux piles se taisent.
    *
    * Ni l'une ni l'autre n'est jouable à cet instant, et « Renoncer » est un mot
    * plus large que l'emplacement de la carte en main : le bouton passait
@@ -158,10 +173,8 @@ export const TableCenter = memo(function TableCenter({
    * information — elles sont déjà grisées — et dit ce qui est vrai : la
    * décision ne se joue pas là.
    */
-  const quietPiles = stealing;
-  // Le Vol occupe le créneau de la carte en main : c'est la même place dans le
-  // tour, et la même question — qu'est-ce que celui qui l'a pioché va en faire.
-  const heldShown: PileCard | null = stealing ? STEAL_CARD : heldCard;
+  const quietPiles = special;
+  const heldShown: PileCard | null = stealing ? STEAL_CARD : swapping ? SWAP_CARD : heldCard;
 
   return (
     // Un bandeau bordé sur ses deux faces : le terrain commun se voit, et on
@@ -265,9 +278,11 @@ export const TableCenter = memo(function TableCenter({
                     aria-label={
                       stealing
                         ? 'Carte Vol : échange une de tes cartes avec un adversaire'
-                        : heldVisible
-                          ? `Carte en main : ${heldCard}`
-                          : 'Carte en main, face cachée'
+                        : swapping
+                          ? 'Carte Valse : intervertis deux de tes cartes'
+                          : heldVisible
+                            ? `Carte en main : ${heldCard}`
+                            : 'Carte en main, face cachée'
                     }
                   />
                 </motion.div>

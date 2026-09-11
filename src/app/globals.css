@@ -20,10 +20,11 @@
   --color-danger: #ff5a5f;
   --color-good: #4ade80;
 
-  /* Les deux cartes du mode spicy, hors de l'échelle bleu → rouge : le magenta
-     du Vol et le blanc du joker ne veulent pas dire « un peu plus » ou « un peu
-     moins », ils veulent dire « autre chose ». */
+  /* Les cartes du mode spicy, hors de l'échelle bleu → rouge : le magenta du
+     Vol, le turquoise de la Valse et le blanc du joker ne veulent pas dire
+     « un peu plus » ou « un peu moins », ils veulent dire « autre chose ». */
   --color-steal: #e94ec0;
+  --color-swap: #2fe0c2;
   --color-joker: #e8e0ff;
 
   /* Code couleur officiel des cartes Skyjo. */
