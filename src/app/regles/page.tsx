@@ -201,7 +201,7 @@ export default function RulesPage() {
 
       <Section n="11" title="Le mode spicy" spicy>
         <p>
-          Quatre cartes en plus dans le paquet, et rien d’autre&nbsp;: le tour de jeu, les colonnes,
+          Quatre nouvelles cartes dans le paquet, et rien d’autre&nbsp;: le tour de jeu, les colonnes,
           les lignes, le comptage et la pénalité de fermeture ne changent pas d’une virgule. L’hôte
           le choisit <Key>dans le salon</Key>, avant de distribuer&nbsp;; ensuite c’est figé pour
           toute la partie.
@@ -215,16 +215,16 @@ export default function RulesPage() {
         </div>
       </Section>
 
-      <Section n="12" title="Le -5 et le joker" spicy>
+      <Section n="12" title="Le -5 et les jokers" spicy>
         <p>
           <Key>Deux -5</Key> rejoignent le paquet. Rien de plus qu’une carte&nbsp;: elle se pose, se
           vole et part à la défausse comme les autres. Il n’y en a que deux, donc une colonne de -5
           est impossible — c’est du point sec, dix-sept d’écart avec un 12.
         </p>
         <p>
-          <Key>Un joker</Key>, un seul. Il vaut <Key>0</Key>, et il complète{' '}
+          <Key>Deux jokers</Key>. Chacun vaut <Key>0</Key>, et complète{' '}
           <Key>n’importe quel groupe</Key>&nbsp;: une colonne <Key>7 / joker / 7</Key> saute comme
-          une colonne de trois 7. Il peut fermer une colonne et une ligne du même coup.
+          une colonne de trois 7. Un joker peut fermer une colonne et une ligne du même coup.
         </p>
         <p>
           Quand il ferme un groupe, il ne part <Key>pas</Key> à la défausse avec les autres&nbsp;:
@@ -236,19 +236,19 @@ export default function RulesPage() {
         <p>
           Sa case ne s’envole donc vers <Key>aucune pile</Key>&nbsp;: elle s’efface sur place,
           pendant que le reste du groupe part à la défausse. C’est la seule carte du jeu qui
-          disparaît comme ça — et la prochaine manche en redistribue un.
+          disparaît comme ça — et la prochaine manche les redistribue.
         </p>
         <p>
           En revanche, si tu <Key>poses une carte dessus</Key>, il s’en va à la défausse comme
-          n’importe quelle autre&nbsp;— et là, oui, quelqu’un peut le reprendre. Et trois jokers ne
-          feraient pas un groupe&nbsp;: il n’y aurait aucune valeur sur laquelle s’accorder. C’est
-          aussi pour ça qu’il n’y en a qu’un.
+          n’importe quelle autre&nbsp;— et là, oui, quelqu’un peut le reprendre. Un groupe doit
+          garder au moins une carte à valeur&nbsp;: <Key>joker / joker / 7</Key> vaut 7 et saute,
+          mais trois jokers n’ont aucune valeur sur laquelle s’accorder et restent en place.
         </p>
       </Section>
 
       <Section n="13" title="La carte Vol" spicy>
         <p>
-          <Key>Quatre cartes Vol</Key> sont glissées dans la pioche — et seulement là. Elles ne
+          <Key>Cinq cartes Vol</Key> sont glissées dans la pioche — et seulement là. Elles ne
           peuvent donc pas dormir dans une grille&nbsp;: un Vol ne se déclenche que si{' '}
           <Key>quelqu’un pioche</Key>. Compte environ un par manche.
         </p>

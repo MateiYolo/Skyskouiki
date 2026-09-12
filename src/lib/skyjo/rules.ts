@@ -55,32 +55,33 @@ export const SPICY_COMPOSITION: ReadonlyArray<readonly [value: number, count: nu
 /**
  * Nombre de cartes Vol glissées dans la pioche en mode spicy.
  *
- * Quatre, parce qu'un Vol ne se déclenche qu'en étant *pioché* (cf.
- * `seedSpecialCards`) : ça fait environ un demi Vol par manche à deux joueurs et
- * un peu plus d'un à quatre. Deux cartes ne sortiraient quasiment jamais, huit
- * feraient de l'échange le jeu principal.
+ * Cinq, parce qu'un Vol ne se déclenche qu'en étant *pioché* (cf.
+ * `seedSpecialCards`) : ça fait un peu plus d'un demi Vol par manche à deux
+ * joueurs et près d'un et demi à quatre. Deux cartes ne sortiraient quasiment
+ * jamais, huit feraient de l'échange le jeu principal.
  */
-export const STEAL_COUNT = 4;
+export const STEAL_COUNT = 5;
 
 /**
  * Nombre de cartes Valse glissées dans la pioche en mode spicy.
  *
- * Autant que de Vol, et pour la même arithmétique : une Valse ne se déclenche
- * qu'en étant *piochée*, ce qui en fait environ une par manche. Elle est aussi
- * la plus douce des deux — elle ne touche que sa propre grille — donc rien ne
- * justifiait de la rendre plus rare que sa jumelle.
+ * Presque autant que de Vol, et pour la même arithmétique : une Valse ne se
+ * déclenche qu'en étant *piochée*, ce qui en fait environ une par manche. Elle
+ * est la plus douce des deux — elle ne touche que sa propre grille — donc c'est
+ * au Vol, et pas à elle, que revient l'exemplaire supplémentaire.
  */
 export const SWAP_COUNT = 4;
 
 /**
  * Nombre de jokers du mode spicy.
  *
- * Un seul, et ce n'est pas qu'une question de dosage : à deux exemplaires, une
- * colonne `joker / joker / 7` poserait la question de ce qu'elle vaut, et deux
- * jokers côte à côte n'auraient plus rien à compléter. À un, la règle se dit en
- * une phrase.
+ * Deux. Un seul ne sortait pas assez souvent pour peser sur une partie, et la
+ * règle tient toujours en une phrase à deux : un groupe doit contenir au moins
+ * une carte à valeur (cf. `uniformValue`), donc `joker / joker / 7` vaut 7 et
+ * saute, tandis que trois jokers n'ont rien sur quoi s'accorder et ne sautent
+ * pas. Au-delà de deux, la grille se fermerait toute seule.
  */
-export const JOKER_COUNT = 1;
+export const JOKER_COUNT = 2;
 
 export const DECK_SIZE = 150;
 export const SPICY_DECK_SIZE =
@@ -259,8 +260,9 @@ export const MIN_GROUP = 3;
  * Le joker, lui, compte dans le groupe sans rien imposer : il prend la valeur
  * des autres. Il en faut donc au moins une autre — un groupe qui ne serait fait
  * que de jokers n'aurait aucune valeur sur laquelle s'accorder, et « trois
- * cartes identiques » ne voudrait plus rien dire. C'est aussi pourquoi le
- * paquet n'en contient qu'un (cf. `JOKER_COUNT`).
+ * cartes identiques » ne voudrait plus rien dire. C'est cette condition qui
+ * permet au paquet d'en contenir plusieurs (cf. `JOKER_COUNT`) : deux jokers et
+ * un 7 forment un groupe de 7, trois jokers ne forment rien.
  */
 function uniformValue(grid: readonly Cell[], indices: readonly number[]): number | null {
   let value: number | null = null;

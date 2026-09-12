@@ -719,7 +719,7 @@ const gridOf = (s: GameState, playerId: string) => s.players.find((p) => p.id ==
 const opponentOf = (s: GameState, playerId: string) => s.players.find((p) => p.id !== playerId)!.id;
 
 describe('composition du mode spicy', () => {
-  it('ajoute deux -5 et un joker au paquet officiel', () => {
+  it('ajoute deux -5 et deux jokers au paquet officiel', () => {
     const deck = buildDeck('spicy');
     expect(deck).toHaveLength(SPICY_DECK_SIZE);
     expect(countCard(deck, -5)).toBe(2);
@@ -1175,6 +1175,9 @@ describe('le joker', () => {
     // Colonne 1 = 1, 5, 9 : un 7, le joker, et un 7 qui arrive de la défausse.
     setGrid(s, id, [1, 7, 4, 6, 2, JOKER_CARD, 5, 10, 3, 9, 11, 8]);
     s.discardPile.push(7);
+    // Le paquet contient d'autres jokers : on les retire de la pioche, sans quoi
+    // on compterait ceux-là plutôt que celui qui vient de fermer le groupe.
+    s.drawPile = s.drawPile.filter((card) => card !== JOKER_CARD);
 
     s = play(s, { type: 'takeDiscard', playerId: id });
     s = play(s, { type: 'placeCard', playerId: id, index: 9 });
@@ -1200,8 +1203,8 @@ describe('le joker', () => {
     const id = s.players[s.currentPlayerIndex].id;
     setGrid(s, id, [1, 7, 4, 6, 2, JOKER_CARD, 5, 10, 3, 9, 11, 8]);
     s.discardPile.push(7);
-    // La graine peut laisser le joker du paquet dans la pioche : on l'en
-    // retire, sans quoi on compterait celui-là.
+    // La graine peut laisser les autres jokers du paquet dans la pioche : on les
+    // en retire, sans quoi on compterait ceux-là.
     s.drawPile = s.drawPile.filter((card) => card !== JOKER_CARD);
     const pileBefore = s.drawPile.length;
 
@@ -1248,13 +1251,40 @@ describe('le joker', () => {
     let s = startedSpicy(2);
     const id = s.players[s.currentPlayerIndex].id;
     // Trois jokers ne sont pas « trois cartes identiques » : ils n'ont rien à
-    // compléter. Le paquet n'en contient qu'un, mais la règle doit être écrite.
+    // compléter. Le paquet n'en contient que deux, mais la règle doit être écrite.
     setGrid(s, id, [JOKER_CARD, 1, 2, 3, JOKER_CARD, 5, 6, 7, JOKER_CARD, 9, 10, 4]);
 
     s = play(s, { type: 'takeDiscard', playerId: id });
     s = play(s, { type: 'placeCard', playerId: id, index: 11 });
 
     for (const i of columnIndices(0)) expect(gridOf(s, id)[i]).not.toBeNull();
+  });
+
+  it('se cumule avec son jumeau dès qu’une carte à valeur les accorde', () => {
+    let s = startedSpicy(2);
+    const id = s.players[s.currentPlayerIndex].id;
+    // Le paquet en contient deux : ils peuvent se retrouver dans la même
+    // colonne. Un 7 suffit alors à dire ce que vaut le groupe.
+    setGrid(s, id, [1, JOKER_CARD, 4, 6, 2, JOKER_CARD, 5, 10, 3, 9, 11, 8]);
+    s.discardPile.push(7);
+    s.drawPile = s.drawPile.filter((card) => card !== JOKER_CARD);
+
+    s = play(s, { type: 'takeDiscard', playerId: id });
+    s = play(s, { type: 'placeCard', playerId: id, index: 9 });
+
+    for (const i of columnIndices(1)) expect(gridOf(s, id)[i]).toBeNull();
+    expect(s.lastEvents).toContainEqual({
+      type: 'groupCleared',
+      playerId: id,
+      kind: 'column',
+      index: 1,
+      value: 7,
+      cells: columnIndices(1),
+      jokers: [1, 5],
+    });
+    // Les deux quittent la manche ensemble : ni défausse, ni pioche.
+    expect(countCard(s.discardPile, JOKER_CARD)).toBe(0);
+    expect(countCard(s.drawPile, JOKER_CARD)).toBe(0);
   });
 
   it('perd son pouvoir dès qu’on le recouvre', () => {
@@ -1278,6 +1308,9 @@ describe('le joker', () => {
     // Le joker en 5 est à l'intersection : colonne 1 de 7, ligne 1 de 3.
     setGrid(s, id, [1, 7, 4, 6, 3, JOKER_CARD, 3, 10, 2, 7, 5, 8]);
     s.discardPile.push(3);
+    // Le paquet contient d'autres jokers : on les retire de la pioche, sans quoi
+    // on compterait ceux-là plutôt que celui qui vient de fermer le groupe.
+    s.drawPile = s.drawPile.filter((card) => card !== JOKER_CARD);
 
     s = play(s, { type: 'takeDiscard', playerId: id });
     s = play(s, { type: 'placeCard', playerId: id, index: 7 });
