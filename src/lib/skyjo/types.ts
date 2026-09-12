@@ -162,8 +162,9 @@ export type GameEvent =
        * lui ferait raconter que la colonne était faite de trois 7, alors que
        * c'est précisément le joker qui l'a fermée.
        *
-       * Elles disent aussi où la carte s'en va : le joker retourne dans la
-       * pioche quand les autres tombent à la défausse.
+       * Elles disent aussi où la carte s'en va : nulle part. Le joker quitte la
+       * manche quand les autres tombent à la défausse — il ne vole donc vers
+       * aucune pile, il s'efface sur sa case.
        */
       jokers: number[];
     }

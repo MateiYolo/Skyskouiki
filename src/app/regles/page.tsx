@@ -228,17 +228,15 @@ export default function RulesPage() {
         </p>
         <p>
           Quand il ferme un groupe, il ne part <Key>pas</Key> à la défausse avec les autres&nbsp;:
-          il <Key>retourne dans la pioche</Key>, mélangé quelque part dedans. Sinon, le joueur
-          suivant n’avait qu’à se servir — la meilleure carte du paquet offerte à quelqu’un qui
-          n’avait rien fait pour l’avoir, souvent au dernier joueur d’une manche qu’on venait de
-          fermer. Il reste en jeu, et il peut revenir&nbsp;: mais il se pioche, il ne se ramasse
-          pas.
+          il <Key>quitte la manche</Key>. Sur la défausse, le joueur suivant n’avait qu’à se
+          servir — la meilleure carte du paquet offerte à quelqu’un qui n’avait rien fait pour
+          l’avoir&nbsp;; et rendu à la pioche, il revenait quand même, en l’annonçant à toute la
+          table. Un joker se gagne une fois et se dépense une fois.
         </p>
         <p>
-          Et <Key>jamais sur le dessus</Key>&nbsp;: il rentre sous plusieurs tours de table de
-          cartes, de quoi le faire oublier avant qu’il ne ressorte. Une pioche, ça se mélange
-          honnêtement&nbsp;— mais un joker rendu qui retombe entre les mains d’en face deux tours
-          plus tard, ça ne se lit pas comme du hasard.
+          Sa case ne s’envole donc vers <Key>aucune pile</Key>&nbsp;: elle s’efface sur place,
+          pendant que le reste du groupe part à la défausse. C’est la seule carte du jeu qui
+          disparaît comme ça — et la prochaine manche en redistribue un.
         </p>
         <p>
           En revanche, si tu <Key>poses une carte dessus</Key>, il s’en va à la défausse comme

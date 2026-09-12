@@ -221,24 +221,43 @@ describe('flightsForEvents', () => {
     ]);
   });
 
-  it('renvoie le joker d’un groupe éliminé vers la pioche, pas vers la défausse', () => {
+  it('ne fait voler le joker d’un groupe éliminé vers aucune pile', () => {
     const view = makeView({
       discardTop: 7,
       lastEvents: [placed(THEM, 9), cleared(THEM, [1, 5, 9], 'column', [5])],
     });
-    const flying = moving(flightsForEvents(view));
+    const flights = flightsForEvents(view);
+    const flying = moving(flights);
 
-    const joker = flying.find((f) => f.from === cellAnchor(THEM, 5))!;
-    // Le voir se poser sur la défausse ferait croire qu'on peut le reprendre au
-    // coup suivant : c'est précisément ce que la règle lui interdit.
-    expect(joker.to).toBe(DRAW_PILE);
-    expect(joker.value).toBe(JOKER_CARD);
+    // Le joker quitte la manche : il ne part ni vers la défausse — on croirait
+    // pouvoir le reprendre au coup suivant — ni vers la pioche, ce qui
+    // annoncerait son retour. Il ne décolle pas du tout : sa case s'efface sur
+    // place (cf. `ClearGhost`, `leaving`).
+    expect(flying.find((f) => f.from === cellAnchor(THEM, 5))).toBeUndefined();
+    expect(flights.every((f) => f.to !== DRAW_PILE)).toBe(true);
+    expect(flights.every((f) => f.value !== JOKER_CARD)).toBe(true);
     // Les deux autres cartes du groupe, elles, partent bien à la défausse.
     for (const i of [1, 9]) {
       expect(flying.find((f) => f.from === cellAnchor(THEM, i))!.to).toBe(DISCARD_PILE);
     }
     // Et rien ne le recouvre sur une pile où il ne se pose jamais.
-    expect(covers(flightsForEvents(view)).every((c) => c.value !== JOKER_CARD)).toBe(true);
+    expect(covers(flights).every((c) => c.value !== JOKER_CARD)).toBe(true);
+  });
+
+  it('fait voler le joker qu’on recouvre, et pas un 0 à sa place', () => {
+    // Recouvrir le joker, c'est le jeter : là, il part bien à la défausse. La
+    // case le range en `value: 0` avec un drapeau, et c'est ce 0 qui volait.
+    const view = makeView({
+      heldCard: 4,
+      heldFrom: 'draw',
+      discardTop: 7,
+    });
+    view.players.find((p) => p.id === ME)!.grid[5] = { faceUp: true, value: 0, joker: true };
+    const flying = moving(flightsForAction(view, { type: 'placeCard', index: 5 }, ME));
+
+    const leaving = flying.find((f) => f.to === DISCARD_PILE)!;
+    expect(leaving.from).toBe(cellAnchor(ME, 5));
+    expect(leaving.value).toBe(JOKER_CARD);
   });
 
   it('laisse le vol se poser avant de vider la colonne qu’il vient de fermer', () => {

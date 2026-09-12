@@ -1,6 +1,6 @@
 'use client';
 
-import { JOKER_CARD, type GameView, type PileCard, type ValueCard } from '@/lib/skyjo';
+import { cellToCard, type GameView, type PileCard, type ValueCard } from '@/lib/skyjo';
 import {
   CLEAR_HOLD,
   CLEAR_STAGGER,
@@ -166,10 +166,16 @@ export function flightsForAction(
       const cell = view.players.find((p) => p.id === playerId)?.grid[action.index];
       if (cell === undefined || cell === null) return [];
       // Ma propre carte cachée reste cachée : le serveur ne m'a pas encore dit
-      // ce qu'il y avait dessous, et on n'invente pas une valeur.
+      // ce qu'il y avait dessous, et on n'invente pas une valeur. Celle qui est
+      // visible part telle qu'elle est — `cellToCard`, et pas `cell.value`, qui
+      // aurait fait voler un 0 à la place du joker qu'on vient de recouvrir.
       return [
         ...coverDiscard(view.discardTop, 0, FLIGHT_NEXT + FLIGHT_DURATION),
-        ...swap(cellAnchor(playerId, action.index), view.heldCard, cell.faceUp ? cell.value : null),
+        ...swap(
+          cellAnchor(playerId, action.index),
+          view.heldCard,
+          cell.faceUp ? cellToCard(cell) : null,
+        ),
       ];
     }
 
@@ -283,8 +289,8 @@ function discardLandings(
         break;
       case 'groupCleared':
         event.cells.forEach((index, rank) => {
-          // Le joker s'en retourne dans la pioche : il ne se pose jamais sur la
-          // défausse, donc il n'a rien à y recouvrir.
+          // Le joker quitte la manche : il ne se pose jamais sur la défausse,
+          // donc il n'a rien à y recouvrir.
           if ((event.jokers ?? []).includes(index)) return;
           landings.push({
             value: event.value,
@@ -386,15 +392,18 @@ export function flightsForEvents(
       // (`ClearGhost`), puis partent à la défausse l'une après l'autre.
       case 'groupCleared':
         event.cells.forEach((index, rank) => {
-          // Le joker ne suit pas le groupe : il repart dans la pioche, et le
-          // trajet doit le montrer. Le voir se poser sur la défausse ferait
-          // croire qu'on peut le reprendre au coup suivant — c'est précisément
-          // ce que la règle lui interdit.
-          const joker = (event.jokers ?? []).includes(index);
+          // Le joker ne suit pas le groupe, et ne va nulle part ailleurs : il
+          // quitte la manche. Donc aucun vol — il s'efface sur place, avec le
+          // fantôme du groupe (cf. `ClearGhost`). C'est la seule disparition
+          // honnête : le voir se poser sur la défausse ferait croire qu'on peut
+          // le reprendre au coup suivant, le voir rentrer dans la pioche
+          // annoncerait à toute la table qu'il reviendra. Il ne fait ni l'un ni
+          // l'autre.
+          if ((event.jokers ?? []).includes(index)) return;
           out.push({
             from: cellAnchor(event.playerId, index),
-            to: joker ? DRAW_PILE : DISCARD_PILE,
-            value: joker ? JOKER_CARD : event.value,
+            to: DISCARD_PILE,
+            value: event.value,
             delay: cleared + rank * CLEAR_STAGGER,
           });
         });

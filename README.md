@@ -21,17 +21,18 @@ distribuer. Il n'ajoute rien au tour de jeu — ni au comptage, ni aux
 éliminations, ni à la pénalité de fermeture : il ajoute trois cartes au paquet.
 **Deux -5**, du point sec (à deux exemplaires, une colonne de -5 reste
 impossible). **Un joker**, qui vaut 0 et complète n'importe quel groupe : une
-colonne `7 / joker / 7` saute — et quand il ferme un groupe, il retourne dans la
-pioche au lieu de se poser sur la défausse, où le joueur suivant n'aurait eu
-qu'à se servir. Pas sur le dessus de la pioche pour autant : quelques tours de
-table le séparent du moment où il peut ressortir, sinon le rendre revenait une
-fois sur trente à le passer directement à l'adversaire. Et **quatre cartes Vol**, qui échangent une de tes cartes contre
-celle d'un adversaire, **face visible ou non** : la carte garde sa face en
-changeant de grille, donc un dos volé reste un dos — personne ne l'a vu, pas
-même le voleur — et le nombre de dos change de camp, jusqu'à fermer la manche
-quand on donne son dernier. Les deux grilles rejouent ensuite leurs
-éliminations, si bien qu'on peut prendre la carte qui ferme sa colonne comme
-laisser à sa victime celle qui ferme la sienne.
+colonne `7 / joker / 7` saute — et quand il ferme un groupe, il ne part pas à la
+défausse avec le reste : il **quitte la manche**. Sur la défausse, le joueur
+suivant n'avait qu'à se servir ; rendu à la pioche, il revenait à quelqu'un qui
+n'avait rien fait pour l'avoir, et le voir y retourner annonçait à toute la
+table qu'il reviendrait. Un joker se gagne une fois et se dépense une fois : sa
+case s'efface sur place, sans voler vers aucune pile. Et **quatre cartes Vol**,
+qui échangent une de tes cartes contre celle d'un adversaire, **face visible ou
+non** : la carte garde sa face en changeant de grille, donc un dos volé reste un
+dos — personne ne l'a vu, pas même le voleur — et le nombre de dos change de
+camp, jusqu'à fermer la manche quand on donne son dernier. Les deux grilles
+rejouent ensuite leurs éliminations, si bien qu'on peut prendre la carte qui
+ferme sa colonne comme laisser à sa victime celle qui ferme la sienne.
 
 Le Vol n'a pas de valeur, donc pas de place dans une grille : il n'existe que
 dans la pioche, et ne se déclenche qu'en étant *pioché*. Ce n'est pas un détail
@@ -126,10 +127,9 @@ suffisent *pas*, et un autre que les mêmes trois cartes suffisent dès qu'une
 colonne éliminée a raccourci la ligne. Le mode spicy y a ses propres sections :
 qu'un Vol ne se trouve jamais ailleurs que dans la pioche, qu'un dos échangé
 reste caché et ne s'annonce à personne, que renoncer coûte un retournement,
-qu'un joker complète une colonne et une ligne du même coup, qu'il rentre alors
-dans la pioche et pas à la défausse, assez loin du dessus pour que personne ne
-le repioche dans la foulée, et qu'il perd son pouvoir dès qu'on pose une carte
-dessus.
+qu'un joker complète une colonne et une ligne du même coup, qu'il quitte alors
+la manche sans se poser sur aucune pile — une fois, même s'il a fermé les deux
+groupes — et qu'il perd son pouvoir dès qu'on pose une carte dessus.
 
 `npm run smoke` joue deux parties complètes par HTTP, une par mode. Les règles
 du vol et du joker sont couvertes au coup par coup côté moteur, avec une graine

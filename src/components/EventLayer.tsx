@@ -87,10 +87,13 @@ export function EventLayer({ view }: { view: GameView }) {
             ? `${spelled[event.cells.length - jokers]} ${event.value} et le joker`
             : `${spelled[event.cells.length]} ${event.value}`;
           const where = mine(event.playerId) ? 'chez toi' : `chez ${nameOf(event.playerId)}`;
+          // Et dire où il va, puisqu'il ne va nulle part : une carte qu'on voit
+          // s'effacer au lieu de rejoindre une pile, ça s'explique une fois.
+          const out = jokers ? ' — il sort du jeu' : '';
           freshHero = {
             id: nextId++,
             title: `${group} éliminée`,
-            subtitle: `${what} ${where}`,
+            subtitle: `${what} ${where}${out}`,
             tone: mine(event.playerId) ? 'good' : 'warn',
           };
           break;
