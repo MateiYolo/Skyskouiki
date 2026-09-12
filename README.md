@@ -124,11 +124,21 @@ Supabase, puis renseigne trois variables d'environnement côté hébergeur :
 La clé de service donne un accès complet à la base : elle ne doit exister que
 dans les variables du serveur.
 
-**La région compte.** Un coup fait deux appels à la base, l'un après l'autre :
-posés de l'autre côté d'un océan, ils coûtent à eux seuls plus que tout le reste
-du tour, et ça ne se voit pas en développement. Les routes API déclarent donc
-`preferredRegion` — `fra1` par défaut, à aligner sur la région du projet
-Supabase.
+**La clé publique compte aussi, et son échec est muet.** C'est elle qui ouvre le
+canal temps réel : mauvaise clé, le WebSocket est refusé en 401, la partie
+continue de marcher — par le sondage de secours, douze fois plus lent et douze
+fois plus gourmand — et rien à l'écran ne le dit. Le client le signale dans la
+console du navigateur ; en cas de doute, c'est la première chose à regarder.
+
+**La région compte.** Un coup fait un ou deux appels à la base, l'un après
+l'autre : posés de l'autre côté d'un océan, ils coûtent à eux seuls plus que
+tout le reste du tour, ils traînent une queue de latence qui finit en
+`504 Gateway Timeout`, et ça ne se voit pas en développement. La région se règle
+dans `vercel.json` (`regions`), **pas** dans les routes : `preferredRegion` est
+déprécié par Next, et un plan Hobby n'applique de toute façon qu'une région à
+tout le projet. À aligner sur celle du projet Supabase — `cdg1` (Paris) pour
+`eu-west-3`. Ça se vérifie sur n'importe quelle réponse : l'en-tête
+`x-vercel-id` commence par la région qui a servi.
 
 Le schéma vit dans un espace `skyjo` dédié, séparé de `public`, et n'est pas
 exposé à PostgREST : le serveur y accède par quatre fonctions SQL réservées au

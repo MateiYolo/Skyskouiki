@@ -4,19 +4,23 @@ import { GameError, getView, performAction } from '@/lib/server/store';
 import type { Action } from '@/lib/skyjo';
 
 export const runtime = 'nodejs';
-/**
- * La fonction tourne à côté de la base, pas à côté du joueur.
- *
- * Un coup fait deux appels à Supabase, l'un après l'autre. Posés de l'autre
- * côté d'un océan, ils coûtent à eux seuls plus que tout le reste du tour — et
- * c'est invisible en développement, où tout est sur la même machine. Le trajet
- * téléphone → fonction, lui, ne se fait qu'une fois et se voit beaucoup moins.
- *
- * `fra1` est Francfort ; `cdg1` (Paris) revient au même à dix millisecondes
- * près. Ce qui compte, c'est que ce soit la région du projet Supabase.
- */
-export const preferredRegion = 'fra1';
 export const dynamic = 'force-dynamic';
+
+/**
+ * La région, elle, se règle dans `vercel.json` — pas ici.
+ *
+ * Un coup fait un ou deux appels à Supabase, l'un après l'autre. Posés de
+ * l'autre côté d'un océan, ils coûtent à eux seuls plus que tout le reste du
+ * tour, et ils traînent une queue de latence qui finit en « Gateway Timeout ».
+ * Le trajet téléphone → fonction, lui, ne se fait qu'une fois et se voit
+ * beaucoup moins : la fonction doit donc être à côté de la base, à Paris.
+ *
+ * `preferredRegion` a longtemps été l'endroit où le dire. Ce n'en est plus un :
+ * Next le déprécie, et le plan Hobby de Vercel ignore de toute façon toute
+ * région demandée fonction par fonction — il n'en applique qu'une, à tout le
+ * projet. D'où `vercel.json`. Ça se vérifie sur n'importe quelle réponse :
+ * l'en-tête `x-vercel-id` commence par la région qui a servi.
+ */
 
 type Context = { params: Promise<{ code: string }> };
 

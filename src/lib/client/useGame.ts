@@ -140,8 +140,14 @@ export function useGame(code: string, playerId: string | null) {
           `/api/games/${code}?playerId=${encodeURIComponent(playerId)}${since ? `&since=${since}` : ''}`,
           { cache: 'no-store' },
         );
-        const body = await res.json();
+        const body = await res.json().catch(() => ({}));
         if (!res.ok) {
+          // Une panne passagère n'efface pas la table. Le serveur qui met du
+          // temps à répondre, le tunnel du métro, la 5G qui tousse : la partie
+          // est toujours là, c'est le trajet qui a manqué, et le sondage
+          // suivant la retrouvera. Effacer l'écran pour ça, c'était sortir le
+          // joueur de sa partie pour une seconde de réseau.
+          if (res.status >= 500 && viewRef.current) return;
           // La prochaine réponse valide devra repasser, quelle que soit sa version.
           lastVersion.current = 0;
           setState({ view: null, loading: false, error: body.error ?? 'Partie introuvable.' });
@@ -158,7 +164,12 @@ export function useGame(code: string, playerId: string | null) {
         applyView(view);
       } while (refreshAgain.current);
     } catch {
-      setState((s) => ({ ...s, loading: false, error: 'Connexion perdue.' }));
+      // Même raison : tant qu'une table est à l'écran, un rafraîchissement qui
+      // n'aboutit pas ne se voit pas. C'est seulement quand il n'y a rien à
+      // montrer qu'il faut le dire.
+      setState((s) =>
+        s.view ? { ...s, loading: false } : { ...s, loading: false, error: 'Connexion perdue.' },
+      );
     } finally {
       inFlight.current = false;
     }
@@ -308,7 +319,18 @@ export function useGame(code: string, playerId: string | null) {
             }, 300);
           },
         )
-        .subscribe((status) => setLive(status === 'SUBSCRIBED'));
+        .subscribe((status) => {
+          setLive(status === 'SUBSCRIBED');
+          // Un canal qui n'ouvre pas, c'est du temps réel qui n'existe pas : les
+          // coups de l'adversaire n'arrivent plus que par le sondage, douze fois
+          // plus lentement et douze fois plus cher en requêtes. Le symptôme est
+          // muet — la partie marche, elle traîne — donc il faut le dire.
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn(
+              `[skyjo] temps réel indisponible (${status}) : vérifier NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.`,
+            );
+          }
+        });
 
       close = () => {
         void client.removeChannel(channel);
