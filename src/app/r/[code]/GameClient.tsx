@@ -8,7 +8,7 @@ import { EventLayer } from '@/components/EventLayer';
 import { FlightLayer } from '@/components/FlightLayer';
 import { MyBoard } from '@/components/MyBoard';
 import { OpponentSheet, OpponentStrip } from '@/components/OpponentStrip';
-import { TableCenter, type LastTurn } from '@/components/TableCenter';
+import { TableCenter } from '@/components/TableCenter';
 import { GameOverPanel, RoundSummary } from '@/components/Overlays';
 import { useMoveEcho } from '@/lib/client/echo';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
@@ -41,10 +41,18 @@ function prompt(
     // reste qu'un.
     case 'playing': {
       const closing = view.finalTurnsLeft !== null;
+      const closedByMe = view.roundCloserId === view.you.id;
       if (view.currentPlayerId !== view.you.id) {
         return {
           title: `${current?.emoji ?? ''} ${current?.name ?? ''} joue`,
-          hint: closing ? 'Son dernier coup, puis on compte.' : 'Observe et prépare ton coup.',
+          hint: closedByMe
+            ? // Celui qui a fermé ne joue plus : sa consigne n'est pas d'attendre,
+              // c'est de savoir ce qu'il risque. C'est la seule chose que le
+              // bandeau rouge disait et que la pastille ne peut pas porter.
+              'Tu ne joues plus : le plus petit total, sinon il double.'
+            : closing
+              ? 'Son dernier coup, puis on compte.'
+              : 'Observe et prépare ton coup.',
         };
       }
       if (view.turnStep === 'choose') {
@@ -278,26 +286,18 @@ export function GameClient({ code }: { code: string }) {
   const move = useMemo(() => (view ? lastMove(view) : null), [view]);
 
   /**
-   * Le bandeau de fin de manche, tant que le dernier tour dure.
+   * La manche est fermée : il ne reste qu'un coup à chacun.
    *
-   * Il ne dit pas seulement « dernier tour » : il dit ce que ça change *pour
-   * celui qui lit*. Celui qui a fermé joue sa pénalité, les autres jouent leur
-   * dernier coup — ce n'est pas la même consigne, et c'est pour ça que l'annonce
-   * d'une seconde et demie ne pouvait pas la porter à elle seule.
+   * Un booléen, désormais, et rien de plus. Le bandeau rouge qui vivait au
+   * milieu de la table portait le mot « dernier tour » en même temps que
+   * l'annonce plein écran, la consigne et la pastille de ma grille — quatre
+   * fois la même chose —, et il poussait la table vers le bas en apparaissant,
+   * au coup où on a le moins envie de voir sa grille bouger. Ce qu'il disait
+   * d'utile en plus (ce que ça change pour celui qui lit) est passé dans
+   * `prompt`, qui a deux lignes réservées de toute façon ; qui a fermé se lit
+   * sur la bande des adversaires, marquée « fermé ».
    */
-  const lastTurn = useMemo<LastTurn | null>(() => {
-    if (!view || view.phase !== 'playing' || view.finalTurnsLeft === null) return null;
-    const closedByMe = view.roundCloserId === view.you.id;
-    if (closedByMe) return { closedByMe, note: 'Le plus petit total, sinon il double.' };
-    const closer = view.players.find((p) => p.id === view.roundCloserId);
-    return {
-      closedByMe,
-      note:
-        view.currentPlayerId === view.you.id
-          ? 'Ton dernier coup, puis on compte.'
-          : `${closer?.name ?? 'Quelqu’un'} a tout retourné.`,
-    };
-  }, [view]);
+  const finalTurn = view?.phase === 'playing' && view.finalTurnsLeft !== null;
 
   // Qui tient la carte posée au milieu de la table. Sans nom dessus, elle
   // n'appartient à personne et un tour d'adversaire se lit comme un décor.
@@ -413,7 +413,7 @@ export function GameClient({ code }: { code: string }) {
             title={title}
             hint={hint}
             emphasis={myTurn || view.phase === 'initialFlip'}
-            lastTurn={lastTurn}
+            finalTurn={finalTurn}
             drawPileCount={view.drawPileCount}
             discardTop={view.discardTop}
             heldCard={view.heldCard}

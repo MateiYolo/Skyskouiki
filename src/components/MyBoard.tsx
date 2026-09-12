@@ -52,12 +52,17 @@ export const MyBoard = memo(function MyBoard({
   echoKey,
   revealing,
 }: MyBoardProps) {
-  const flag =
-    view.roundCloserId === view.you.id
-      ? 'tu as fermé'
-      : view.finalTurnsLeft !== null
-        ? 'dernier tour'
-        : null;
+  /**
+   * La seule chose que cet en-tête a à dire sur la fin de manche : que c'est
+   * *moi* qui l'ai déclenchée.
+   *
+   * Elle disait aussi « dernier tour » quand quelqu'un d'autre avait fermé —
+   * mais à cet instant-là, l'annonce, la consigne passée au rouge et le liseré
+   * de l'écran le disaient déjà : quatre fois le même mot au même moment. Reste
+   * ce qu'aucun des trois ne dit, et qui répond à la bande des adversaires où
+   * le voisin qui a fermé porte le même marquage.
+   */
+  const closedByMe = view.roundCloserId === view.you.id;
 
   return (
     <div className="safe-bottom board-cap mx-auto flex min-h-0 w-full max-w-[26rem] flex-[5] flex-col px-3 pt-1.5">
@@ -67,12 +72,14 @@ export const MyBoard = memo(function MyBoard({
         <Avatar player={me} active={myTurn} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[0.8rem] font-semibold leading-tight">{me.name}</div>
-          {/* Une pastille pleine, pas une ligne de texte fin : c'est l'état qui
-              décide de tout le reste du coup, il doit se voir depuis la grille
-              sans qu'on ait à relire l'en-tête. */}
-          {flag && (
-            <span className="mt-0.5 inline-block rounded-full bg-danger/20 px-1.5 py-px text-[0.6rem] font-black uppercase tracking-[0.08em] leading-tight text-danger">
-              {flag}
+          {/* `block` et `leading-none`, et pas une bribe en ligne : posée dans
+              une ligne de texte, elle héritait de l'interligne du bloc et
+              dépassait d'un cheveu les tuiles de score, ce qui suffisait à
+              pousser la grille d'un pixel au moment exact où la manche se
+              ferme. Aplatie, elle tient dans la hauteur que l'en-tête a déjà. */}
+          {closedByMe && (
+            <span className="mt-0.5 block w-fit rounded-full bg-danger/20 px-1.5 py-0.5 text-[0.6rem] font-black uppercase leading-none tracking-[0.08em] text-danger">
+              tu as fermé
             </span>
           )}
         </div>

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Confetti } from './Confetti';
 import { ScoreMeter } from './PlayerPanel';
 import { GAUGE_DELAY, GAUGE_FILL, GAUGE_STAGGER, MOVE, SETTLE } from '@/lib/client/motion';
+import { gameQuip, roundQuip, type QuipTone } from '@/lib/client/quips';
 import type { GameView, RoundScore } from '@/lib/skyjo';
 
 /**
@@ -54,6 +55,20 @@ function CountUp({
 
   return <span className="tnum">{value}</span>;
 }
+
+/**
+ * La couleur de la pique : c'est le résultat qui la choisit, pas le texte.
+ *
+ * Le rouge est réservé aux deux situations qui font vraiment mal — fermeture
+ * doublée, écart massif. Le reste des manches ratées se lit en blanc : sinon
+ * tout le tableau clignote en rouge une manche sur deux, et la couleur ne dit
+ * plus rien.
+ */
+const QUIP_INK: Record<QuipTone, string> = {
+  good: 'text-good',
+  warn: 'text-ink',
+  bad: 'text-danger',
+};
 
 function Sheet({ children }: { children: React.ReactNode }) {
   return (
@@ -161,19 +176,17 @@ export function RoundSummary({
   busy: boolean;
 }) {
   const scores = view.lastRoundScores ?? [];
-  const mine = scores.find((s) => s.playerId === view.you.id);
+  // La vanne est calculée sur la situation exacte de la manche (cf. `quips`) :
+  // c'est la seule ligne de la feuille qui parle au joueur plutôt qu'au tableau.
+  const quip = roundQuip(view);
 
   return (
     <Sheet>
       <h2 className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-ink-faint">
         Manche {view.round} terminée
       </h2>
-      <p className="mb-4 mt-1 text-center text-lg font-bold">
-        {mine?.doubled
-          ? 'Aïe. Fermeture ratée, score doublé.'
-          : mine && mine.final <= 0
-            ? 'Manche parfaite 🧊'
-            : 'On compte les dégâts'}
+      <p className={`mb-4 mt-1 text-center text-lg font-bold leading-snug ${QUIP_INK[quip.tone]}`}>
+        {quip.line}
       </p>
 
       <ScoreRows view={view} scores={scores} />
@@ -223,9 +236,7 @@ export function GameOverPanel({
           <h2 className="mt-2 text-2xl font-black">
             {iWon ? 'Tu gagnes !' : `${winner?.name} gagne`}
           </h2>
-          <p className="mt-1 text-sm text-ink-dim">
-            {iWon ? 'Le plus petit score l’emporte. Bien joué.' : 'La revanche est juste en dessous.'}
-          </p>
+          <p className="mt-1 text-sm leading-snug text-ink-dim">{gameQuip(view)}</p>
         </div>
 
         <ul className="space-y-1.5">
