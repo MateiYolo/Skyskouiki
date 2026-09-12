@@ -145,6 +145,20 @@ export interface PlayingCardProps {
   overlay?: ReactNode;
   /** Épouse son conteneur au lieu d'imposer son ratio : pour une carte en vol. */
   fill?: boolean;
+  /**
+   * Cette carte ne sera jamais ni touchée ni désignée.
+   *
+   * Le calque extérieur ne sert qu'à deux choses : grandir de quatre pour cent
+   * quand on la désigne, rapetisser sous le doigt. Une grille adverse ne fait
+   * ni l'un ni l'autre — ses douze cartes montaient donc douze animations qui
+   * n'avaient rien à animer, et ça se payait comptant à la distribution, au
+   * moment précis où tout arrive d'un coup.
+   *
+   * À ne poser que d'après la structure, jamais d'après l'état du tour : le
+   * type de l'élément change avec, et une carte qui change de type est démontée
+   * puis remontée — c'est-à-dire un retournement qui saute au lieu de tourner.
+   */
+  still?: boolean;
   /** Emplacement nommé, mesuré par la couche de vol. */
   'data-anchor'?: string;
   className?: string;
@@ -162,6 +176,7 @@ function Card({
   onClick,
   overlay,
   fill = false,
+  still = false,
   className = '',
   style,
   'aria-label': ariaLabel,
@@ -245,8 +260,6 @@ function Card({
       className,
     ].join(' '),
     style,
-    animate: selected ? SCALE_SELECTED : SCALE_IDLE,
-    transition: SNAP,
   };
 
   /**
@@ -277,23 +290,36 @@ function Card({
     onClick!();
   };
 
+  const role = interactive ? 'button' : 'img';
+  const onKeyDown = interactive
+    ? (event: { key: string; preventDefault: () => void }) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          press({});
+        }
+      }
+    : undefined;
+
+  // Rien à animer ici : un élément ordinaire, et douze de moins à monter par
+  // grille adverse. Le retournement, lui, vit dans `inner` et reste animé.
+  if (still) {
+    return (
+      <div {...shared} role={role} aria-label={label}>
+        {inner}
+      </div>
+    );
+  }
+
   return (
     <motion.div
       {...shared}
-      role={interactive ? 'button' : 'img'}
+      role={role}
       aria-label={label}
       tabIndex={interactive ? 0 : undefined}
       onPointerDown={interactive ? press : undefined}
-      onKeyDown={
-        interactive
-          ? (event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                press({});
-              }
-            }
-          : undefined
-      }
+      onKeyDown={onKeyDown}
+      animate={selected ? SCALE_SELECTED : SCALE_IDLE}
+      transition={SNAP}
       whileTap={interactive ? TAP_SCALE : undefined}
     >
       {inner}

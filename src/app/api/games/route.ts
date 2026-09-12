@@ -3,6 +3,8 @@ import { fail, ok } from '@/lib/server/respond';
 import { GameError, createRoom } from '@/lib/server/store';
 
 export const runtime = 'nodejs';
+/** La région de la base, comme pour `/api/games/[code]`. */
+export const preferredRegion = 'fra1';
 export const dynamic = 'force-dynamic';
 
 /** Crée une partie. Le créateur en devient l'hôte. */

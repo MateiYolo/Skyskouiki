@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, createGame } from './engine';
-import { toView } from './view';
+import { toSharedView, toView, viewFor } from './view';
 import type { GameState } from './types';
 
 /**
@@ -108,5 +108,69 @@ describe('toView — rattrapage des coups manqués', () => {
       state = flipped.state;
     }
     expect(state.eventLog.length).toBeLessThanOrEqual(24);
+  });
+});
+
+/**
+ * Ce qui se teste ici : la vue diffusée dit exactement la même chose que la
+ * vue demandée.
+ *
+ * Le serveur ne publie plus qu'une seule projection pour toute la table, et
+ * chaque téléphone se l'adresse à lui-même. Tout l'intérêt — plus d'aller-retour
+ * pour apprendre un coup — repose sur le fait que `viewFor` retrouve, à partir
+ * de la vue seule, ce que le serveur aurait calculé depuis l'état complet. Si
+ * les deux divergeaient d'un champ, un joueur taperait sur une carte que le
+ * serveur refuserait ensuite : la latence reviendrait par la porte du fond,
+ * sous forme d'un coup annulé.
+ */
+describe('vue diffusée', () => {
+  const situations = (): Array<[string, GameState]> => {
+    const lobby = createGame({
+      id: 'g',
+      code: '1234',
+      host: { id: HOST, name: 'Matei', emoji: '🦊' },
+      seed: 3,
+    });
+    const joined = applyAction(lobby, { type: 'join', playerId: GUEST, name: 'Lisa', emoji: '🐙' });
+    if (!joined.ok) throw new Error(joined.error);
+
+    const flipping = started();
+    const playing = afterInitialFlips(flipping);
+    const drew = applyAction(playing, {
+      type: 'drawFromPile',
+      playerId: playing.players[playing.currentPlayerIndex].id,
+    });
+    if (!drew.ok) throw new Error(drew.error);
+
+    return [
+      ['salon', joined.state],
+      ['retournements initiaux', flipping],
+      ['en jeu, choix', playing],
+      ['en jeu, carte en main', drew.state],
+    ];
+  };
+
+  it('rend la même vue que celle qu’on serait allé chercher', () => {
+    for (const [label, state] of situations()) {
+      const shared = toSharedView(state);
+      for (const viewer of [HOST, GUEST, 'un-inconnu']) {
+        expect(viewFor(shared, viewer), `${label} / ${viewer}`).toEqual(toView(state, viewer));
+      }
+    }
+  });
+
+  it('ne dit rien de plus à un joueur qu’à un autre', () => {
+    for (const [label, state] of situations()) {
+      const mine = toView(state, HOST) as unknown as Record<string, unknown>;
+      const theirs = toView(state, GUEST) as unknown as Record<string, unknown>;
+      const differs = Object.keys(mine).filter(
+        (key) => JSON.stringify(mine[key]) !== JSON.stringify(theirs[key]),
+      );
+      // Les deux champs qui nomment le lecteur ont le droit de différer : ce
+      // sont justement ceux que `viewFor` recalcule. Tout le reste doit être
+      // identique — si un jour un autre champ dépend du lecteur, il ne peut
+      // plus se diffuser, et c'est ce test qui l'attrape avant le canal.
+      expect(differs.filter((key) => key !== 'you' && key !== 'legalActions'), label).toEqual([]);
+    }
   });
 });

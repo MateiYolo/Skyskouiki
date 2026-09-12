@@ -51,7 +51,7 @@ navigateur ──POST /api/games/:code──▶ Next.js ──RPC──▶ Postg
     │                            moteur de règles (TS pur)
     │                                    │
     └────── Supabase Realtime ◀───────────┘
-             (« la partie a bougé »)
+             (la vue d'après, en entier)
 ```
 
 Trois idées structurent le tout.
@@ -72,13 +72,30 @@ l'état, pas de lire une réponse.
 **Le temps réel ne transporte rien de secret.** Deux tables : `skyjo.games`
 (méta publique — code, version, à qui de jouer) diffusée en temps réel, et
 `skyjo.game_states` (l'état complet) sur laquelle la RLS est active *sans aucune
-policy*, donc illisible pour tout rôle client. Quand la version change, le
-téléphone est réveillé et redemande sa propre vue.
+policy*, donc illisible pour tout rôle client. Ce qui circule sur le canal, c'est
+la projection expurgée — la même que le serveur rendrait à qui la demanderait, et
+rien de plus.
 
 Les écritures utilisent un verrou optimiste : `skyjo_commit_state` n'écrit que si
 la version en base n'a pas bougé. Si les deux joueurs tapent en même temps, le
-perdant rejoue son action sur l'état frais et se fait proprement refuser par le
-moteur si ce n'était plus son tour.
+perdant rejoue son action sur l'état frais — que le refus lui rapporte, plutôt
+que de le lui faire redemander — et se fait proprement refuser par le moteur si
+ce n'était plus son tour. C'est aussi ce qui permet au serveur de garder les
+parties en mémoire entre deux requêtes sans rien parier : jouer sur un état
+périmé ne produit pas un état faux, ça produit un refus qui porte de quoi
+recommencer.
+
+Et c'est la **vue** qui se diffuse, pas une notification. `toView` était déjà
+identique pour tous les joueurs — seuls `you` et `legalActions` nomment leur
+lecteur, et les deux se recalculent depuis la vue elle-même (`viewFor`). Le
+serveur publie donc une seule projection sur le canal de la partie, et chaque
+téléphone se l'adresse. Apprendre le coup d'en face ne coûte plus un
+aller-retour complet de plus que le coup lui-même — ce qui, avant, retombait
+pile pendant son animation. La ligne écrite dans `skyjo.games` reste le filet :
+une diffusion ne se rejoue pas, une ligne en base finit toujours par se voir.
+
+Le détail de ce que ça coûtait, mesures à l'appui, est dans
+[`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
 ## Lancer en local
 
@@ -106,6 +123,12 @@ Supabase, puis renseigne trois variables d'environnement côté hébergeur :
 
 La clé de service donne un accès complet à la base : elle ne doit exister que
 dans les variables du serveur.
+
+**La région compte.** Un coup fait deux appels à la base, l'un après l'autre :
+posés de l'autre côté d'un océan, ils coûtent à eux seuls plus que tout le reste
+du tour, et ça ne se voit pas en développement. Les routes API déclarent donc
+`preferredRegion` — `fra1` par défaut, à aligner sur la région du projet
+Supabase.
 
 Le schéma vit dans un espace `skyjo` dédié, séparé de `public`, et n'est pas
 exposé à PostgREST : le serveur y accède par quatre fonctions SQL réservées au
@@ -149,6 +172,7 @@ milliseconde pour qu'une carte éliminée ne s'affiche pas deux fois.
 src/lib/skyjo/     moteur pur : types, règles, réducteur, projection client
 src/lib/server/    magasin (Supabase ou mémoire), validation, réponses HTTP
 src/lib/client/    identité locale, temps réel, retours sonores et haptiques
+src/lib/channel.ts le nom du canal de diffusion, partagé par les deux côtés
 src/components/    cartes, grilles, table, écrans de score
 src/app/           accueil, salon + partie, règles, API
 supabase/          migrations SQL

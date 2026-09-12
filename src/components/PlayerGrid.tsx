@@ -198,6 +198,7 @@ const GridCell = memo(function GridCell({
   echoKey,
   turning,
   anchor,
+  still,
   onCell,
 }: {
   index: number;
@@ -216,6 +217,8 @@ const GridCell = memo(function GridCell({
   echoKey: number;
   turning: boolean;
   anchor: string | undefined;
+  /** Cette grille ne se joue pas : la carte se passe du calque qui l'anime. */
+  still: boolean;
   onCell?: (index: number) => void;
 }) {
   const press = useCallback(() => onCell?.(index), [onCell, index]);
@@ -236,6 +239,7 @@ const GridCell = memo(function GridCell({
         ) : undefined
       }
       onClick={playable && onCell ? press : undefined}
+      still={still}
     />
   );
 });
@@ -306,6 +310,10 @@ export const PlayerGrid = memo(function PlayerGrid({
             echoKey={echoKey}
             turning={revealing?.includes(index) ?? false}
             anchor={playerId ? cellAnchor(playerId, index) : undefined}
+            // Décidé par la structure, pas par le tour : une grille sans
+            // gestionnaire n'en aura jamais. Changer d'avis en cours de partie
+            // démonterait les douze cartes — et un retournement démonté saute.
+            still={!onCell}
             onCell={onCell}
           />
         );
