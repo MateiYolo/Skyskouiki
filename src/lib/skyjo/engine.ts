@@ -13,16 +13,13 @@ import {
   emptyGrid,
   gridSum,
   isFullyRevealed,
-  jokerReturnDepth,
   nextRandom,
-  returnToDrawPile,
   seedSpecialCards,
   shuffle,
   spicySpecials,
 } from './rules';
 import {
   GRID_SIZE,
-  JOKER_CARD,
   isStealCard,
   isSwapCard,
   type Action,
@@ -507,19 +504,12 @@ function maybeStartPlay(s: GameState, events: GameEvent[]) {
 }
 
 function resolveGroups(s: GameState, player: Player, events: GameEvent[]) {
-  const { groups, jokers } = clearGroups(player.grid, s.discardPile);
-  for (const cleared of groups) {
+  // Le joker éventuellement présent dans un groupe ne repart sur aucune pile :
+  // il quitte la manche (cf. `clearGroups`). Il n'y a donc rien à en faire ici
+  // — et c'est tout l'intérêt : une carte qui sort du jeu ne se range nulle
+  // part, ne se redistribue pas, et n'annonce pas son retour.
+  for (const cleared of clearGroups(player.grid, s.discardPile)) {
     events.push({ type: 'groupCleared', playerId: player.id, ...cleared });
-  }
-  // Le joker qui vient de fermer un groupe retourne dans la pioche au lieu de
-  // se poser sur la défausse : personne ne le ramasse gratuitement au tour
-  // suivant (cf. `returnToDrawPile`). Et pas sur le dessus : quelques tours de
-  // table le séparent du moment où il peut ressortir (cf. `jokerReturnDepth`),
-  // sans quoi le rendre à la pioche revenait à le passer à l'adversaire une
-  // fois sur trente.
-  for (let i = 0; i < jokers; i++) {
-    const depth = jokerReturnDepth(s.drawPile.length, s.players.length);
-    s.seed = returnToDrawPile(s.drawPile, JOKER_CARD, s.seed, depth);
   }
 }
 

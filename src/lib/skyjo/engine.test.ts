@@ -3,7 +3,6 @@ import { applyAction, createGame } from './engine';
 import {
   DECK_COMPOSITION,
   DECK_SIZE,
-  JOKER_COOLDOWN_LAPS,
   JOKER_COUNT,
   SPICY_COMPOSITION,
   SPICY_DECK_SIZE,
@@ -13,7 +12,6 @@ import {
   cardToCell,
   columnIndices,
   gridSum,
-  jokerReturnDepth,
   rowIndices,
   shuffle,
 } from './rules';
@@ -1192,68 +1190,33 @@ describe('le joker', () => {
       jokers: [5],
     });
     // Il ne se pose pas sur la défausse, où le joueur suivant n'aurait qu'à se
-    // servir : il retourne dans la pioche.
+    // servir, ni dans la pioche, d'où il reviendrait : il quitte la manche.
     expect(countCard(s.discardPile, JOKER_CARD)).toBe(0);
-    expect(countCard(s.drawPile, JOKER_CARD)).toBe(1);
+    expect(countCard(s.drawPile, JOKER_CARD)).toBe(0);
   });
 
-  it('rentre dans la pioche, pas sur la défausse, quand il ferme un groupe', () => {
+  it('quitte la manche quand il ferme un groupe : ni défausse, ni pioche', () => {
     let s = startedSpicy(2);
     const id = s.players[s.currentPlayerIndex].id;
     setGrid(s, id, [1, 7, 4, 6, 2, JOKER_CARD, 5, 10, 3, 9, 11, 8]);
     s.discardPile.push(7);
+    // La graine peut laisser le joker du paquet dans la pioche : on l'en
+    // retire, sans quoi on compterait celui-là.
+    s.drawPile = s.drawPile.filter((card) => card !== JOKER_CARD);
     const pileBefore = s.drawPile.length;
 
     s = play(s, { type: 'takeDiscard', playerId: id });
     s = play(s, { type: 'placeCard', playerId: id, index: 9 });
 
-    // Le joueur suivant ne peut pas le ramasser : ce n'est pas lui qui est sur
-    // le dessus de la défausse, et la pioche a une carte de plus.
-    expect(s.discardPile.at(-1)).not.toBe(JOKER_CARD);
-    expect(s.drawPile).toHaveLength(pileBefore + 1);
-    // Mélangé dedans, pas enfoui dessous : il peut ressortir dans la manche.
-    expect(countCard(s.drawPile, JOKER_CARD)).toBe(1);
-  });
-
-  it('rentre assez loin pour que personne ne le repioche dans la foulée', () => {
-    // Le bug : « quelque part dans la pioche » incluait le dessus. Le joker
-    // rendu se repiochait deux tours plus tard, et c'était l'adversaire qui
-    // l'avait — exactement ce que le retour à la pioche devait empêcher.
-    //
-    // La graine décide du point de chute : ce n'est donc pas un tirage qu'on
-    // vérifie ici, c'est un plancher, et il doit tenir sur tous.
-    const depths = new Set<number>();
-    for (let seed = 0; seed < 120; seed++) {
-      let s = startedSpicy(2, seed);
-      const id = s.players[s.currentPlayerIndex].id;
-      setGrid(s, id, [1, 7, 4, 6, 2, JOKER_CARD, 5, 10, 3, 9, 11, 8]);
-      s.discardPile.push(7);
-      // Selon la graine, le joker du paquet dort déjà dans la pioche : on l'en
-      // retire, sans quoi on mesurerait sa place à lui et pas celle du nôtre.
-      s.drawPile = s.drawPile.filter((card) => card !== JOKER_CARD);
-      const floor = jokerReturnDepth(s.drawPile.length, s.players.length);
-
-      s = play(s, { type: 'takeDiscard', playerId: id });
-      s = play(s, { type: 'placeCard', playerId: id, index: 9 });
-
-      // On pioche par la fin du tableau : ce qui le suit est ce qui sortira
-      // avant lui, donc autant de tirages qu'il faudra attendre.
-      const depth = s.drawPile.length - 1 - s.drawPile.indexOf(JOKER_CARD);
-      expect(depth).toBeGreaterThanOrEqual(floor);
-      depths.add(depth);
-    }
-    // Un plancher, pas une place fixe : il retombe toujours ailleurs.
-    expect(depths.size).toBeGreaterThan(1);
-  });
-
-  it('attend d’autant plus de tours que la table est grande, sans s’enterrer', () => {
-    // Un tour de table consomme au plus une carte par joueur.
-    expect(jokerReturnDepth(120, 2)).toBe(2 * JOKER_COOLDOWN_LAPS);
-    expect(jokerReturnDepth(120, 8)).toBe(8 * JOKER_COOLDOWN_LAPS);
-    // Pioche courte : le plancher se rabat sur la moitié, sinon il enterrerait
-    // la carte au lieu de la faire patienter.
-    expect(jokerReturnDepth(10, 8)).toBe(5);
-    expect(jokerReturnDepth(0, 4)).toBe(0);
+    // Personne ne le ramasse, personne ne le repioche : il n'est nulle part.
+    expect(countCard(s.discardPile, JOKER_CARD)).toBe(0);
+    expect(countCard(s.drawPile, JOKER_CARD)).toBe(0);
+    // La pioche ne bouge pas non plus : une carte qui sort du jeu ne se range
+    // pas, même dessous.
+    expect(s.drawPile).toHaveLength(pileBefore);
+    // Et pas davantage dans une grille : il a quitté la manche, pas changé de
+    // place. (Il revient à la manche suivante, qui repart d'un paquet neuf.)
+    for (const p of s.players) expect(p.grid.some((cell) => cell?.joker)).toBe(false);
   });
 
   it('repart à la défausse comme les autres quand on le recouvre', () => {
@@ -1325,9 +1288,9 @@ describe('le joker', () => {
     expect(groups).toHaveLength(2);
     // Le joker est signalé dans les deux : c'est lui qui a fermé l'une et l'autre.
     for (const g of groups) expect(g).toMatchObject({ jokers: [5] });
-    // Une case n'a beau fermer qu'un seul joker, elle appartient aux deux
-    // groupes : c'est une carte qui rentre dans la pioche, pas deux.
+    // Une case a beau fermer deux groupes, c'est une carte qui s'en va, pas
+    // deux : elle quitte la manche une fois, et n'atterrit nulle part.
     expect(countCard(s.discardPile, JOKER_CARD)).toBe(0);
-    expect(countCard(s.drawPile, JOKER_CARD)).toBe(1);
+    expect(countCard(s.drawPile, JOKER_CARD)).toBe(0);
   });
 });

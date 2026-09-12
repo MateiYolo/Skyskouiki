@@ -184,67 +184,6 @@ export function seedSpecialCards(
   return { pile: items, seed: next };
 }
 
-/**
- * Nombre de tours de table que le joker passe au minimum dans la pioche avant
- * de pouvoir en ressortir.
- *
- * « Quelque part dans la pioche » suffisait en théorie et pas en pratique :
- * tiré uniformément, le joker pouvait retomber sur le dessus, et il se
- * repiochait deux tours plus tard. Le hasard était honnête, ce qui se lisait à
- * table ne l'était pas — on venait de le rendre, l'adversaire l'avait. Une
- * carte rendue à la pioche doit d'abord disparaître.
- *
- * Trois tours de table, comptés en cartes piochées : un tour ne suffit pas à
- * faire oublier d'où la carte vient, et au-delà on ne fixe plus un délai, on
- * enterre la carte.
- */
-export const JOKER_COOLDOWN_LAPS = 3;
-
-/**
- * À combien de cartes du dessus de la pioche le joker doit rentrer.
- *
- * Le délai se compte en tours de table (cf. `JOKER_COOLDOWN_LAPS`) : un tour
- * consomme au plus une carte par joueur, donc `joueurs × tours` cartes
- * au-dessus de lui garantissent autant de tours avant qu'il ne puisse revenir.
- *
- * Plafonné à la moitié de la pioche, parce qu'une pioche courte — fin de
- * manche, table pleine — ferait de ce plancher un enfouissement, et le joker
- * doit rester tirable : il attend, il ne sort pas du jeu.
- */
-export function jokerReturnDepth(pileLength: number, playerCount: number): number {
-  return Math.min(playerCount * JOKER_COOLDOWN_LAPS, Math.floor(pileLength / 2));
-}
-
-/**
- * Remet une carte dans la pioche, à une position tirée au sort, avec au moins
- * `minDepth` cartes au-dessus d'elle.
- *
- * Sert au joker qui vient de fermer un groupe : posé sur la défausse, il se
- * ramassait au tour suivant par celui qui jouait après — la carte la plus forte
- * du paquet offerte à quelqu'un qui n'avait rien fait pour l'avoir, et souvent
- * au dernier joueur d'une manche qui se fermait. Rendu à la pioche, il reste en
- * jeu et peut revenir, mais il ne se sert plus : il se tire.
- *
- * N'importe où sous ces `minDepth` cartes, pas dessous : enfoui, il ne
- * ressortirait jamais d'une manche, ce qui reviendrait à le retirer du jeu.
- *
- * On pioche par le haut, donc par la fin du tableau : insérer à l'indice `i`
- * laisse `pile.length - i` cartes à tirer avant celle-ci.
- *
- * Mute `pile`. Renvoie la graine suivante.
- */
-export function returnToDrawPile(
-  pile: PileCard[],
-  card: PileCard,
-  seed: number,
-  minDepth = 0,
-): number {
-  const { value, seed: next } = nextRandom(seed);
-  const deepest = Math.max(0, pile.length - Math.max(0, minDepth));
-  pile.splice(Math.floor(value * (deepest + 1)), 0, card);
-  return next;
-}
-
 /** PRNG déterministe (mulberry32) : même graine = même partie, donc tests reproductibles. */
 export function nextRandom(seed: number): { value: number; seed: number } {
   const t = (seed + 0x6d2b79f5) | 0;
@@ -352,21 +291,8 @@ export interface ClearedGroup {
    * feraient apparaître une carte fantôme sur le trou.
    */
   cells: number[];
-  /** Celles de ces cases qui portaient le joker. */
+  /** Celles de ces cases qui portaient le joker — celui-ci quitte la manche. */
   jokers: number[];
-}
-
-export interface ClearOutcome {
-  groups: ClearedGroup[];
-  /**
-   * Combien de jokers ces éliminations ont retirés de la grille.
-   *
-   * Ils ne sont pas partis à la défausse avec le reste du groupe : c'est à
-   * l'appelant de les remettre en jeu (cf. `returnToDrawPile`). Un compte, et
-   * pas les cases : une même case peut fermer une colonne *et* une ligne, et
-   * ce qui se remet en jeu, c'est une carte, pas deux.
-   */
-  jokers: number;
 }
 
 /**
@@ -384,16 +310,21 @@ export interface ClearOutcome {
  * de trois homogène (cf. `MIN_GROUP`) et doit partir à son tour. Chaque passe
  * retire au moins une carte, donc la boucle s'arrête.
  *
- * Le joker fait exception à la destination : il ne se pose pas sur la défausse,
- * il est rendu à l'appelant pour repartir dans la pioche (cf.
- * `returnToDrawPile`). C'est la seule carte du paquet qui vaut la peine d'être
- * ramassée, et sur la défausse le joueur suivant n'avait qu'à se servir.
+ * Le joker, lui, ne part pas à la défausse avec le groupe : il **quitte la
+ * manche**, comme un Vol une fois résolu. C'est la seule carte du paquet qui
+ * vaut la peine d'être ramassée — sur la défausse, le joueur suivant n'avait
+ * qu'à se servir ; rendue à la pioche, elle revenait à quelqu'un qui n'avait
+ * rien fait pour l'avoir, et la voir repartir dans la pioche annonçait à toute
+ * la table qu'elle reviendrait. Un joker se gagne une fois et se dépense une
+ * fois : il sort du jeu sur le groupe qu'il a fermé.
+ *
+ * Les cases qui le portaient sont dans `ClearedGroup.jokers` : l'affichage en a
+ * besoin pour le faire disparaître au lieu de l'envoyer sur une pile.
  *
  * Mute `grid` et `discardPile`.
  */
-export function clearGroups(grid: Cell[], discardPile: ValueCard[]): ClearOutcome {
+export function clearGroups(grid: Cell[], discardPile: ValueCard[]): ClearedGroup[] {
   const groups: ClearedGroup[] = [];
-  let jokers = 0;
 
   for (;;) {
     const found: ClearedGroup[] = [];
@@ -408,12 +339,12 @@ export function clearGroups(grid: Cell[], discardPile: ValueCard[]): ClearOutcom
     for (let col = 0; col < COLS; col++) collect('column', col, columnIndices(col));
     for (let row = 0; row < ROWS; row++) collect('row', row, rowIndices(row));
 
-    if (found.length === 0) return { groups, jokers };
+    if (found.length === 0) return groups;
 
     for (const i of new Set(found.flatMap((group) => group.cells))) {
       const card = cellToCard(grid[i]!);
-      if (isJokerCard(card)) jokers++;
-      else discardPile.push(card);
+      // Le joker ne va nulle part : il ne se pose sur aucune pile.
+      if (!isJokerCard(card)) discardPile.push(card);
       grid[i] = null;
     }
 

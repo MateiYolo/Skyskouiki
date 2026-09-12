@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { memo, useCallback } from 'react';
 import { EmptySlot, PlayingCard, type CardSize } from './PlayingCard';
 import { cellAnchor } from '@/lib/client/flights';
-import { CLEAR_STAGGER } from '@/lib/client/motion';
+import { CLEAR_STAGGER, FLIGHT_DURATION } from '@/lib/client/motion';
 
 import { JOKER_CARD, cellToCard, type ValueCard, type ViewCell } from '@/lib/skyjo';
 
@@ -127,29 +127,42 @@ function SelectedRing({ radius, tone }: { radius: string; tone: SelectedTone }) 
  * qu'on les lise — puis elles disparaissent d'un coup, à l'instant précis où
  * la couche de vol les fait décoller vers la défausse (`clearDelay`). La carte
  * ne s'efface pas : elle change de main.
+ *
+ * Sauf le joker (`leaving`), qui ne change de main pour personne : il quitte la
+ * manche. Aucun vol ne prend le relais, donc sa disparition se joue ici, et
+ * elle doit se voir — il s'efface en s'éloignant, le temps qu'aurait duré un
+ * trajet. Se couper net comme les autres passerait pour une carte escamotée.
  */
 function ClearGhost({
   value,
   size,
   delay,
   rank,
+  leaving = false,
 }: {
   value: ValueCard;
   size: CardSize;
   delay: number;
   /** Rang de la carte dans le groupe : le coup d'œil part d'un bout à l'autre. */
   rank: number;
+  /** La carte sort du jeu : personne ne vient la chercher, elle s'efface. */
+  leaving?: boolean;
 }) {
-  const total = delay + 0.1;
+  const total = delay + (leaving ? FLIGHT_DURATION : 0.1);
   const gone = delay / total;
   // Le sursaut parcourt le groupe au lieu de le secouer d'un bloc : c'est ce
   // qui fait lire « ces trois-là, ensemble » plutôt que « ces trois-là ».
-  const wave = Math.min(0.34, (0.12 + rank * CLEAR_STAGGER) / total);
+  // Compté en secondes puis ramené à la durée : il tombe au même instant, que
+  // la carte parte en vol ou qu'elle s'efface.
+  const wave = Math.min(0.34 * (delay + 0.1), 0.12 + rank * CLEAR_STAGGER) / total;
   return (
     <motion.div
       className="pointer-events-none absolute inset-0 z-10"
       initial={{ opacity: 1, scale: 1 }}
-      animate={{ opacity: [1, 1, 1, 0], scale: [1, 1.08, 1.04, 1] }}
+      animate={{
+        opacity: [1, 1, 1, 0],
+        scale: leaving ? [1, 1.08, 1.04, 1.22] : [1, 1.08, 1.04, 1],
+      }}
       transition={{ duration: total, times: [0, wave, gone, 1], ease: 'easeOut' }}
     >
       <PlayingCard value={value} faceUp size={size} intent="target" />
@@ -264,11 +277,13 @@ export const PlayerGrid = memo(function PlayerGrid({
                   key={echoKey}
                   // Le joker repart en joker : c'est lui qui a fermé le groupe,
                   // le montrer sous la valeur des autres rendrait l'élimination
-                  // incompréhensible.
+                  // incompréhensible. Et il repart pour de bon — d'où `leaving`,
+                  // qui lui donne la seule sortie qu'il ait : sur place.
                   value={cleared!.jokers.includes(index) ? JOKER_CARD : cleared!.value}
                   size={size}
                   delay={cleared!.delay}
                   rank={cleared!.indices.indexOf(index)}
+                  leaving={cleared!.jokers.includes(index)}
                 />
               )}
             </div>
