@@ -1,26 +1,26 @@
 'use client';
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { GameView } from '@/lib/skyjo';
+import { VIEW_EVENT, gameChannel } from '@/lib/channel';
+import { viewFor, type GameView, type SharedView } from '@/lib/skyjo';
 import { flightsForAction, requestFlights } from './flights';
 import { optimisticView, revealingIndex, stillWaiting } from './optimistic';
 import type { ClientAction } from './actions';
 
 export type { ClientAction };
 
-let browserClient: SupabaseClient | null | undefined;
-
-/** Client Supabase du navigateur : uniquement pour écouter, jamais pour écrire. */
-function supabase(): SupabaseClient | null {
-  if (browserClient !== undefined) return browserClient;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  browserClient =
-    url && key
-      ? createClient(url, key, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 10 } } })
-      : null;
-  return browserClient;
+/**
+ * L'adresse de la socket temps réel, à partir de celle du projet.
+ *
+ * C'est tout ce qu'on prend de Supabase côté navigateur. Le client complet
+ * embarquait l'authentification, PostgREST, le stockage et les fonctions —
+ * près de 300 Ko de code que cette application n'appelle jamais, puisque le
+ * navigateur n'écrit ni ne lit jamais la base. Il n'écoute.
+ */
+function socketUrl(url: string): string {
+  const endpoint = new URL('realtime/v1', `${url.replace(/\/+$/, '')}/`);
+  endpoint.protocol = endpoint.protocol.replace('http', 'ws');
+  return endpoint.href;
 }
 
 interface State {
@@ -67,6 +67,10 @@ export function useGame(code: string, playerId: string | null) {
   useEffect(() => {
     viewRef.current = view;
   }, [view]);
+  // Le rafraîchissement, lisible sans faire de l'abonnement temps réel une
+  // dépendance : un canal qui se remonte à chaque rendu perd les coups qui
+  // tombent entre les deux.
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
 
   /**
    * Adopte une vue qui fait autorité.
@@ -87,6 +91,35 @@ export function useGame(code: string, playerId: string | null) {
       );
     },
     [playerId],
+  );
+
+  /**
+   * Adopte une vue diffusée par le serveur.
+   *
+   * C'est le chemin rapide, et le seul qui ne coûte rien : le coup arrive
+   * entier, il n'y a plus qu'à se l'adresser. Trois cas le renvoient au chemin
+   * lent, et chacun pour une raison précise :
+   *
+   *   - **un coup à moi est en vol** : c'est sa réponse qui fait autorité, elle
+   *     porte les valeurs que la diffusion ne peut pas connaître (ce que je
+   *     viens de piocher, ce qu'il y avait sous la carte retournée) ;
+   *   - **la version n'est pas neuve** : c'est l'écho de mon propre coup ;
+   *   - **elle saute une version** : les événements de celle du milieu manquent,
+   *     donc l'animation aussi. `refresh` sait les rejouer avec `since` — un
+   *     adversaire ne doit pas éliminer une colonne dans mon dos.
+   */
+  const adopt = useCallback(
+    (shared: SharedView) => {
+      if (!playerId) return;
+      if (pending.current > 0) return;
+      if (shared.version <= lastVersion.current) return;
+      if (shared.version !== lastVersion.current + 1) {
+        void refreshRef.current();
+        return;
+      }
+      applyView(viewFor(shared, playerId));
+    },
+    [applyView, playerId],
   );
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -214,45 +247,106 @@ export function useGame(code: string, playerId: string | null) {
   );
 
   useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
+
+  useEffect(() => {
     // Première synchronisation avec le serveur : c'est bien un effet de bord.
     void refresh();
   }, [refresh]);
 
-  // Temps réel : on n'écoute que le compteur de version, jamais l'état.
+  /**
+   * Temps réel : la vue arrive, elle ne s'annonce plus.
+   *
+   * Deux écoutes sur le même canal, et il faut les deux :
+   *
+   *   - **la diffusion** porte la vue entière. C'est le chemin normal, et il ne
+   *     coûte rien : plus d'aller-retour pour apprendre ce qui vient de se
+   *     passer. Avant, la notification ne transportait qu'un numéro de version
+   *     et il fallait tout redemander — soit un trajet complet de plus que le
+   *     coup lui-même, qui retombait pile pendant son animation ;
+   *   - **la méta publique** reste le filet. Une diffusion est sans mémoire :
+   *     partie au mauvais moment, elle est perdue pour de bon. La ligne écrite
+   *     en base, elle, finit toujours par se voir. Elle n'agit qu'après un
+   *     court délai — le temps de laisser la diffusion gagner la course, ce
+   *     qu'elle fait presque toujours.
+   *
+   * Le paquet temps réel est chargé à la demande : il ne doit pas retarder la
+   * première image de la partie.
+   */
   useEffect(() => {
-    const client = supabase();
-    if (!client || !playerId) return;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+    if (!url || !key || !playerId) return;
 
-    const channel = client
-      .channel(`skyjo:${code}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'skyjo', table: 'games', filter: `code=eq.${code}` },
-        (payload) => {
-          // La méta publique porte la version — c'est même sa seule raison
-          // d'être. Quand elle n'est pas plus récente que celle qu'on affiche,
-          // c'est l'écho de notre propre coup, dont la réponse du POST a déjà
-          // livré la vue : aller la redemander, c'est un aller-retour complet
-          // qui retombe pile pendant l'animation du coup qu'on vient de jouer.
-          const version = (payload.new as { version?: unknown } | null)?.version;
-          if (typeof version === 'number' && version <= lastVersion.current) return;
-          void refresh();
-        },
-      )
-      .subscribe((status) => setLive(status === 'SUBSCRIBED'));
+    let disposed = false;
+    let close: (() => void) | null = null;
+    let backstop: ReturnType<typeof setTimeout> | undefined;
+
+    void (async () => {
+      const { RealtimeClient } = await import('@supabase/realtime-js');
+      if (disposed) return;
+
+      const client = new RealtimeClient(socketUrl(url), {
+        params: { apikey: key, eventsPerSecond: 10 },
+      });
+
+      const channel = client
+        .channel(gameChannel(code))
+        .on('broadcast', { event: VIEW_EVENT }, ({ payload }) => adopt(payload as SharedView))
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'skyjo', table: 'games', filter: `code=eq.${code}` },
+          (payload) => {
+            const version = (payload.new as { version?: unknown } | null)?.version;
+            if (typeof version !== 'number' || version <= lastVersion.current) return;
+            clearTimeout(backstop);
+            backstop = setTimeout(() => {
+              // La diffusion est arrivée entre-temps : il n'y a plus rien à
+              // aller chercher.
+              if (version > lastVersion.current) void refreshRef.current();
+            }, 300);
+          },
+        )
+        .subscribe((status) => setLive(status === 'SUBSCRIBED'));
+
+      close = () => {
+        void client.removeChannel(channel);
+        client.disconnect();
+      };
+      if (disposed) close();
+    })();
 
     return () => {
-      void client.removeChannel(channel);
+      disposed = true;
+      clearTimeout(backstop);
+      setLive(false);
+      close?.();
     };
-  }, [code, playerId, refresh]);
+  }, [adopt, code, playerId]);
 
-  // Filet : sondage lent, et remise à jour dès qu'on revient sur l'onglet.
+  /**
+   * Filet : sondage lent, et remise à jour dès qu'on revient sur l'onglet.
+   *
+   * Franchement plus lent qu'avant en direct : la diffusion porte désormais les
+   * coups, ce sondage ne rattrape plus qu'une socket tombée sans le dire. Hors
+   * direct, il reste le seul mécanisme, donc il reste serré.
+   *
+   * `visibilitychange` et `focus` disent souvent la même chose au même moment —
+   * un onglet qu'on retrouve déclenche les deux. Sans le garde-fou, revenir sur
+   * la partie coûtait deux requêtes au lieu d'une.
+   */
   useEffect(() => {
     if (!playerId) return;
-    const period = live ? 15000 : 2500;
+    const period = live ? 30000 : 2500;
     const timer = setInterval(() => void refresh(), period);
+    let last = 0;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void refresh();
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - last < 1000) return;
+      last = now;
+      void refresh();
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);

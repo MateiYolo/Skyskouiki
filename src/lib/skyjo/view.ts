@@ -4,7 +4,6 @@ import type {
   GameEvent,
   GameState,
   Phase,
-  Player,
   RoundScore,
   TurnStep,
   ValueCard,
@@ -86,6 +85,14 @@ export interface GameView {
   legalActions: LegalAction[];
 }
 
+/**
+ * La vue sans les deux champs qui nomment son lecteur.
+ *
+ * C'est la forme qui se diffuse : une seule projection pour toute la table,
+ * que chaque téléphone s'adresse ensuite à lui-même (cf. `viewFor`).
+ */
+export type SharedView = Omit<GameView, 'you' | 'legalActions'>;
+
 function viewCell(cell: Cell): ViewCell {
   if (cell === null) return null;
   if (!cell.faceUp) return { faceUp: false };
@@ -122,8 +129,25 @@ function eventsSince(state: GameState, since: number | undefined): GameEvent[] {
  * lui rejoue en événements, jamais de ce qu'il a le droit de voir.
  */
 export function toView(state: GameState, viewerId: string, since?: number): GameView {
+  return viewFor(toSharedView(state, since), viewerId);
+}
+
+/**
+ * La partie de la vue qui est la même pour tout le monde — c'est-à-dire tout,
+ * sauf les deux champs qui nomment le lecteur.
+ *
+ * Ce n'est pas une commodité : c'est ce qui permet de *diffuser* un coup au
+ * lieu de le faire redemander. Le serveur publie cette projection telle quelle
+ * sur le canal de la partie, et chaque téléphone se l'adresse à lui-même avec
+ * `viewFor`. Sans ça, apprendre qu'un coup a eu lieu coûtait un aller-retour
+ * complet de plus que le coup lui-même.
+ *
+ * Rien n'y est secret qui ne le soit déjà : `toView` était déjà identique pour
+ * tous les joueurs, et sa sortie est déjà ce que n'importe qui connaissant le
+ * code de la partie obtient en la demandant.
+ */
+export function toSharedView(state: GameState, since?: number): SharedView {
   const current = state.players[state.currentPlayerIndex] ?? null;
-  const isCurrent = !!current && current.id === viewerId;
 
   return {
     id: state.id,
@@ -158,12 +182,25 @@ export function toView(state: GameState, viewerId: string, since?: number): Game
     lastEvents: eventsSince(state, since),
     lastRoundScores: state.lastRoundScores,
     winnerId: state.winnerId,
+  };
+}
+
+/**
+ * Adresse une vue partagée à un joueur : qui il est, et ce qu'il peut jouer.
+ *
+ * Les deux se déduisent de la vue elle-même — c'est tout l'intérêt. Le
+ * navigateur qui reçoit une diffusion n'a donc rien à redemander au serveur
+ * pour savoir sur quoi taper.
+ */
+export function viewFor(shared: SharedView, viewerId: string): GameView {
+  return {
+    ...shared,
     you: {
       id: viewerId,
-      isHost: state.hostId === viewerId,
-      isCurrent,
+      isHost: shared.hostId === viewerId,
+      isCurrent: shared.currentPlayerId === viewerId,
     },
-    legalActions: legalActionsFor(state, viewerId),
+    legalActions: legalActionsFrom(shared, viewerId),
   };
 }
 
@@ -175,10 +212,10 @@ export function toView(state: GameState, viewerId: string, since?: number): Game
  * par ses éliminations n'a plus rien à échanger, et on se retrouve alors avec
  * un Vol en main et personne à voler.
  */
-function canSteal(state: GameState, me: Player): boolean {
-  const holdsCard = (p: Player) => p.grid.some((cell) => cell !== null);
+function canSteal(view: SharedView, me: ViewPlayer): boolean {
+  const holdsCard = (p: ViewPlayer) => p.grid.some((cell) => cell !== null);
   if (!holdsCard(me)) return false;
-  return state.players.some((p) => p.id !== me.id && holdsCard(p));
+  return view.players.some((p) => p.id !== me.id && holdsCard(p));
 }
 
 /**
@@ -188,41 +225,51 @@ function canSteal(state: GameState, me: Player): boolean {
  * réarranger — et on se retrouverait avec une Valse en main et une seule case
  * à désigner.
  */
-function canSwap(me: Player): boolean {
+function canSwap(me: ViewPlayer): boolean {
   return me.grid.filter((cell) => cell !== null).length >= 2;
 }
 
-export function legalActionsFor(state: GameState, viewerId: string): LegalAction[] {
-  const me = state.players.find((p) => p.id === viewerId);
+/**
+ * Les coups jouables, déduits de la vue seule.
+ *
+ * Écrite sur la vue et non sur l'état, et c'est tout l'enjeu : le navigateur
+ * peut l'appeler. Une vue diffusée devient donc immédiatement jouable, sans
+ * repasser par le serveur pour demander sur quoi taper.
+ *
+ * Les comptes dont elle a besoin sont déjà dans la projection — `faceUpCount`,
+ * `faceDownCount`, `drawPileCount`, `discardCount` — et les cases retirées y
+ * sont toujours `null`. Rien de ce qui décide d'un coup légal n'était secret.
+ */
+export function legalActionsFrom(view: SharedView, viewerId: string): LegalAction[] {
+  const me = view.players.find((p) => p.id === viewerId);
   if (!me) return [];
-  const current = state.players[state.currentPlayerIndex] ?? null;
-  const isCurrent = !!current && current.id === viewerId;
+  const isCurrent = view.currentPlayerId === viewerId;
 
-  switch (state.phase) {
+  switch (view.phase) {
     case 'lobby': {
-      if (state.hostId !== viewerId) return [];
+      if (view.hostId !== viewerId) return [];
       // Le mode se change tant que rien n'est distribué, même seul dans le salon.
-      return state.players.length >= 2 ? ['setVariant', 'startGame'] : ['setVariant'];
+      return view.players.length >= 2 ? ['setVariant', 'startGame'] : ['setVariant'];
     }
     case 'initialFlip':
-      return countFaceUp(me.grid) < 2 ? ['flipInitial'] : [];
+      return me.faceUpCount < 2 ? ['flipInitial'] : [];
     case 'playing':
       if (!isCurrent) return [];
-      if (state.turnStep === 'choose') {
-        const canDraw = state.drawPile.length > 0 || state.discardPile.length > 1;
+      if (view.turnStep === 'choose') {
+        const canDraw = view.drawPileCount > 0 || view.discardCount > 1;
         return canDraw ? ['drawFromPile', 'takeDiscard'] : ['takeDiscard'];
       }
-      if (state.turnStep === 'holding') {
-        return state.heldFrom === 'draw' && countFaceDown(me.grid) > 0
+      if (view.turnStep === 'holding') {
+        return view.heldFrom === 'draw' && me.faceDownCount > 0
           ? ['placeCard', 'discardHeld']
           : ['placeCard'];
       }
       // Renoncer reste toujours possible : c'est ce qui garantit qu'un Vol ne
       // peut pas bloquer un tour, même sans cible.
-      if (state.turnStep === 'stealing') {
-        return canSteal(state, me) ? ['steal', 'declineSteal'] : ['declineSteal'];
+      if (view.turnStep === 'stealing') {
+        return canSteal(view, me) ? ['steal', 'declineSteal'] : ['declineSteal'];
       }
-      if (state.turnStep === 'swapping') {
+      if (view.turnStep === 'swapping') {
         return canSwap(me) ? ['swap', 'declineSwap'] : ['declineSwap'];
       }
       return ['flipCard'];
@@ -231,4 +278,16 @@ export function legalActionsFor(state: GameState, viewerId: string): LegalAction
     case 'gameOver':
       return ['playAgain'];
   }
+}
+
+/**
+ * Les coups jouables à partir de l'état serveur.
+ *
+ * Passe par la projection, pour qu'il n'existe qu'une seule définition de ce
+ * qui est légal — celle que le navigateur applique aussi. Deux implémentations
+ * qui s'accordent aujourd'hui finiraient par diverger, et la divergence se
+ * paierait en coups refusés après coup.
+ */
+export function legalActionsFor(state: GameState, viewerId: string): LegalAction[] {
+  return legalActionsFrom(toSharedView(state), viewerId);
 }

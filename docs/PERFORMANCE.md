@@ -1,5 +1,10 @@
 # Audit de performance
 
+> **État : les sept corrections sont appliquées.** Ce document garde le
+> diagnostic d'origine — c'est lui qui explique *pourquoi* le code a la forme
+> qu'il a maintenant. Ce qui a changé, et ce que ça a donné à la mesure, est
+> résumé au § 10.
+
 Ce document répond à une question précise : **pourquoi un coup ne répond pas au
 doigt**, en particulier piocher, prendre une carte et la poser.
 
@@ -287,6 +292,70 @@ ligne à changer.
 Ce n'est pas la première chose à faire. C'est la bonne chose à faire si, une
 fois les sept points ci-dessus appliqués, le jeu ne répond toujours pas au
 doigt.
+
+---
+
+## 10. Ce qui a été fait, et ce que ça a donné
+
+Les sept points sont appliqués. Ce qui suit distingue **ce qui a été mesuré
+après** de ce qui ne peut l'être que sur le déploiement réel.
+
+### Mesuré
+
+| | avant | après |
+| --- | --- | --- |
+| JS chargé avant la première image, page de partie | **889 Ko** | **657 Ko** |
+| dont `@supabase/supabase-js` | 289 Ko | — |
+| code temps réel | dans le chemin critique | **56 Ko, après la première image** |
+| tous les paquets confondus, gzip | 297 Ko | 252 Ko |
+| `/r/[code]` au build | `ƒ` (fonction à chaque ouverture) | `●` (mis en cache, servi du CDN) |
+| tests | 127 | **129** |
+
+Le paquet temps réel ne descend plus qu'une fois la partie affichée, et la
+socket se monte à partir de là. C'est 232 Ko de moins à télécharger, analyser et
+compiler avant que le premier écran n'apparaisse — sur un téléphone, c'est la
+part la plus chère du chargement.
+
+### Structurel, vérifiable au build mais pas chiffrable ici
+
+Les allers-retours supprimés ne se mesurent pas sur `localhost`, où ils coûtent
+déjà zéro. Ce qui est vérifiable, c'est qu'ils ne sont plus là :
+
+- **le coup de l'adversaire** ne déclenche plus de `GET`. Le serveur publie la
+  vue, le téléphone l'adopte (`viewFor`). La ligne en base reste le filet, et
+  n'agit qu'après 300 ms — le temps de laisser la diffusion gagner la course ;
+- **le coup du joueur actif** ne fait plus qu'un appel à la base au lieu de
+  deux dans le cas courant : l'état vient du cache du processus, et le verrou
+  optimiste reste seul garant de la correction ;
+- **une collision** ne coûte plus une relecture : `skyjo_commit_state` rend
+  l'état frais avec son refus ;
+- **les routes API** déclarent leur région (`fra1`), donc ne dépendent plus du
+  hasard du placement.
+
+### Non fait, et pourquoi
+
+Le § 7 proposait de monter le conteneur 3D d'une carte seulement quand elle
+tourne. Ça n'a pas été fait tel quel : le type de l'élément aurait alors changé
+en cours de partie, React aurait démonté puis remonté les douze cartes, et un
+retournement démonté saute au lieu de tourner — exactement le défaut qu'un
+commentaire du code met en garde contre. À la place, le calque *extérieur* d'une
+carte injouable — celui qui ne sert qu'à l'agrandir quand on la désigne — est
+un élément ordinaire au lieu d'un élément animé, décidé par la structure de la
+grille et non par l'état du tour. Douze animations de moins par grille adverse,
+sans risque de remontage.
+
+Cette dernière économie, comme la suppression du `backdrop-blur`, retire du
+travail réel mais reste **sous le bruit de mesure** de ce banc : les temps
+d'interaction et le blocage cumulé se chevauchent avant et après. C'est un gain
+qu'on peut justifier, pas un gain qu'on peut chiffrer ici.
+
+### À faire au déploiement
+
+1. **Appliquer la migration** `supabase/migrations/20260912090000_commit_returns_state.sql`.
+   Tant qu'elle ne l'est pas, l'ancienne fonction rend un booléen : le code le
+   détecte et relit comme avant — plus lent, pas faux.
+2. **Vérifier la région.** `preferredRegion = 'fra1'` doit correspondre à celle
+   du projet Supabase.
 
 ---
 

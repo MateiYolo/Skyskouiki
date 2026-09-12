@@ -4,6 +4,18 @@ import { GameError, getView, performAction } from '@/lib/server/store';
 import type { Action } from '@/lib/skyjo';
 
 export const runtime = 'nodejs';
+/**
+ * La fonction tourne à côté de la base, pas à côté du joueur.
+ *
+ * Un coup fait deux appels à Supabase, l'un après l'autre. Posés de l'autre
+ * côté d'un océan, ils coûtent à eux seuls plus que tout le reste du tour — et
+ * c'est invisible en développement, où tout est sur la même machine. Le trajet
+ * téléphone → fonction, lui, ne se fait qu'une fois et se voit beaucoup moins.
+ *
+ * `fra1` est Francfort ; `cdg1` (Paris) revient au même à dix millisecondes
+ * près. Ce qui compte, c'est que ce soit la région du projet Supabase.
+ */
+export const preferredRegion = 'fra1';
 export const dynamic = 'force-dynamic';
 
 type Context = { params: Promise<{ code: string }> };

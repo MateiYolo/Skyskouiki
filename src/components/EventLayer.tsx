@@ -339,10 +339,15 @@ export function EventLayer({ view }: { view: GameView }) {
         {hero && (
           <motion.div
             key={hero.id}
-            className="max-w-[17rem] rounded-2xl border px-4 py-2 text-center backdrop-blur-md"
+            // Pas de `backdrop-blur` : le fond était déjà opaque à 85 %, donc
+            // le flou ne montrait presque rien — et il coûtait la
+            // recomposition de toute la table sous l'annonce, à chaque image,
+            // pendant qu'un coup s'anime. Quatre points d'opacité de plus
+            // donnent le même résultat pour rien.
+            className="max-w-[17rem] rounded-2xl border px-4 py-2 text-center"
             style={{
               borderColor: HERO_EDGE[hero.tone],
-              background: 'rgb(11 7 22 / 0.85)',
+              background: 'rgb(11 7 22 / 0.94)',
               boxShadow: hero.tone === 'alert' ? '0 0 24px rgb(255 90 95 / 0.28)' : undefined,
             }}
             initial={{ opacity: 0, y: -8 }}
@@ -374,13 +379,16 @@ export function EventLayer({ view }: { view: GameView }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={MOVE}
+            // Les fonds sont la teinte d'avant, déjà aplatie sur le feutre :
+            // exactement ce que le navigateur composait, mais sans refaire le
+            // calcul soixante fois par seconde au-dessus d'une table qui bouge.
             className={[
-              'rounded-full border px-3.5 py-1.5 text-[0.72rem] font-medium backdrop-blur-md',
+              'rounded-full border px-3.5 py-1.5 text-[0.72rem] font-medium',
               toast.tone === 'good'
-                ? 'border-good/40 bg-good/15 text-good'
+                ? 'border-good/40 bg-[#152726] text-good'
                 : toast.tone === 'warn'
-                  ? 'border-accent/40 bg-accent/15 text-accent'
-                  : 'border-white/15 bg-white/10 text-ink-dim',
+                  ? 'border-accent/40 bg-[#30251e] text-accent'
+                  : 'border-white/15 bg-[#23202d] text-ink-dim',
             ].join(' ')}
           >
             {toast.text}
