@@ -720,7 +720,7 @@ function VariantPicker({
 }) {
   const spicy = variant === 'spicy';
   const note = spicy
-    ? 'Deux -5, un joker, quatre Vol et quatre Valse glissés dans le paquet.'
+    ? 'Deux -5, deux jokers, cinq Vol et quatre Valse glissés dans le paquet.'
     : 'Le paquet officiel, rien de plus.';
 
   return (
