@@ -354,8 +354,96 @@ qu'on peut justifier, pas un gain qu'on peut chiffrer ici.
 1. **Appliquer la migration** `supabase/migrations/20260912090000_commit_returns_state.sql`.
    Tant qu'elle ne l'est pas, l'ancienne fonction rend un booléen : le code le
    détecte et relit comme avant — plus lent, pas faux.
-2. **Vérifier la région.** `preferredRegion = 'fra1'` doit correspondre à celle
-   du projet Supabase.
+2. **Vérifier la région.** La fonction doit tourner dans la région du projet
+   Supabase.
+
+Les deux ont été vérifiés en production après coup, et **aucun des deux n'était
+fait**. Le § 11 raconte ce que ça donnait, et ce qui a été changé pour ça.
+
+---
+
+## 11. Ce que la production a dit ensuite
+
+Le § 10 mesure un banc. Ce paragraphe-ci lit les journaux de la vraie partie,
+sur les 24 h qui encadrent la mise en ligne. Motif : des « Écriture impossible :
+Gateway Timeout » signalés en jeu, plus fréquents qu'avant.
+
+### Les chiffres
+
+| | avant | après |
+| --- | --- | --- |
+| `skyjo_commit_state` — appels | 3 344 | 1 523 |
+| `skyjo_commit_state` — 504 | 3 (0,09 %) | 7 (0,46 %) |
+| `skyjo_load_game` — appels | 11 923 | 3 769 |
+| `skyjo_load_game` — 504 | 12 (0,10 %) | 9 (0,24 %) |
+| latence d'un appel, p50 | 105 ms | 104 ms |
+| latence d'un appel, p99 | 668 ms (écriture) | 1 393 ms (écriture) |
+
+Les deux lectures que le § 4 voulait supprimer l'ont bien été : deux fois moins
+d'appels par coup. Mais le taux d'échec a quintuplé — et un échec, ici, c'est le
+coup du joueur qui disparaît derrière un bandeau rouge.
+
+### Trois causes, dont deux qui n'étaient pas dans le code
+
+**1. La fonction n'a jamais quitté la Virginie.** Les journaux Supabase donnent
+l'origine de chaque appel : `colo: IAD`, adresses AWS `us-east-1`. L'en-tête
+`x-vercel-id` de l'application confirme : `iad1`. La base, elle, est à Paris
+(`eu-west-3`). `preferredRegion = 'fra1'` n'a rien fait, pour deux raisons qui
+se cumulent : Next le déprécie, et le plan Hobby ne sait pas régler la région
+fonction par fonction — il en applique une seule, à tout le projet.
+
+D'où un plancher de ~100 ms par appel (p50), une queue à 1,4 s (p99), et un
+bout de cette queue qui dépasse les cinq secondes que la passerelle Supabase
+accorde avant de rendre `504`. C'est ce 504 que le joueur lisait.
+
+Que le taux ait *augmenté* pendant que le nombre d'appels baissait n'a rien de
+paradoxal : la lecture-avant-écriture entretenait la connexion. Supprimée, la
+connexion refroidit entre deux coups, et une poignée de main TLS transatlantique
+se paie au prix fort — juste avant l'écriture, c'est-à-dire au pire moment.
+
+→ `vercel.json` fixe désormais `regions: ["cdg1"]`, et les `preferredRegion`
+sont retirés. Vérification : `x-vercel-id` doit commencer par `cdg1`.
+
+**2. La migration n'était pas appliquée.** `skyjo_commit_state` rendait encore
+un booléen. Le repli prévu marchait — le code relit et rejoue — mais chaque
+collision coûtait l'aller-retour que le § 4 avait justement acheté. Or le cache
+en processus *crée* des collisions là où la relecture systématique n'en créait
+pas : c'est son principe, et c'est gratuit tant que le refus rapporte l'état
+frais. Sans la migration, ce n'est plus gratuit.
+
+**3. Le temps réel n'a jamais fonctionné.** 3 012 ouvertures de WebSocket sur la
+période, **toutes en 401**, aucune n'atteignant le service Realtime : la
+passerelle refuse la clé. La diffusion ajoutée au § 3 part bien (202 côté
+serveur) mais n'arrive à personne, et chaque téléphone retombe sur le sondage de
+secours — 2,5 s au lieu de 30 s, soit les douze mille lectures par jour du
+tableau ci-dessus.
+
+C'est une clé, pas du code : `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ne
+correspond pas au projet. Le symptôme était muet — la partie marche, elle
+traîne — donc le client le dit maintenant dans la console quand le canal
+n'ouvre pas.
+
+### Et en attendant, ne plus perdre le coup
+
+Les trois causes ci-dessus se règlent en configuration. Restait qu'un seul 504,
+d'où qu'il vienne, coûtait son coup au joueur : aucun délai de garde, aucune
+reprise, et le message de PostgREST affiché tel quel.
+
+- **Un appel est borné à 2,5 s** au lieu d'attendre les cinq secondes de la
+  passerelle. Une lecture se retente toute seule.
+- **Une écriture qui ne répond pas n'est plus un échec.** Elle a pu avoir lieu :
+  on relit, et un jeton tiré au sort avant l'écriture (`writeId`, transporté par
+  l'état) dit si c'était la nôtre. Si oui, le coup est acquis ; sinon seulement,
+  il se rejoue. Sans ce jeton on ne pourrait pas trancher — trouver la version
+  attendue en base ne prouve rien, l'adversaire a pu écrire le même numéro.
+  Deux tests tiennent les deux bouts.
+- **Un rafraîchissement qui échoue n'efface plus la table.** Une réponse 5xx ou
+  une requête qui n'aboutit pas laissait l'écran de partie pour un message
+  d'erreur plein cadre : un tunnel de métro sortait le joueur de sa partie. Tant
+  qu'une table est affichée, ces pannes-là sont muettes, le sondage suivant
+  rattrape.
+- **Le message a changé** : « Le serveur met du temps à répondre. Réessaie. »
+  plutôt que le texte brut de la passerelle.
 
 ---
 

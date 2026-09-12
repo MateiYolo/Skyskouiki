@@ -16,6 +16,17 @@ export default defineConfig({
      * valeur — une constante de carte, une fonction de conversion — Vitest doit
      * savoir où va `@/`.
      */
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      /**
+       * `server-only` est un marqueur : importé hors d'un composant serveur, il
+       * lève — c'est tout son travail. Le compilateur de Next lui substitue un
+       * module vide côté serveur ; on fait pareil, sinon le magasin serait le
+       * seul module du projet impossible à tester.
+       */
+      'server-only': fileURLToPath(
+        new URL('./node_modules/server-only/empty.js', import.meta.url),
+      ),
+    },
   },
 });

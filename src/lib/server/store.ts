@@ -29,6 +29,26 @@ import {
 const CODE_ALPHABET = '0123456789';
 const MAX_COMMIT_RETRIES = 6;
 
+/**
+ * Combien de temps on laisse à un appel Supabase avant de le considérer perdu.
+ *
+ * La passerelle du projet, elle, attend cinq secondes avant de rendre un
+ * « Gateway Timeout ». Attendre autant, c'est offrir au joueur cinq secondes
+ * d'écran figé puis une erreur ; couper avant, c'est pouvoir retenter pendant
+ * qu'il regarde encore sa carte bouger. Le 99ᵉ centile d'un appel qui aboutit
+ * est à 1,4 s : deux secondes et demie laissent passer tout ce qui va arriver.
+ */
+const RPC_TIMEOUT_MS = 2500;
+
+/**
+ * Budget total d'une action, tentatives comprises. Au-delà, on rend la main.
+ *
+ * Six tentatives à deux secondes et demie dépasseraient la durée de vie d'une
+ * fonction serverless : être coupé en plein coup ne dit rien au joueur, alors
+ * qu'un « réessaie » rendu à temps lui laisse la main.
+ */
+const ACTION_BUDGET_MS = 7000;
+
 export class GameError extends Error {
   constructor(
     message: string,
@@ -36,6 +56,55 @@ export class GameError extends Error {
   ) {
     super(message);
   }
+}
+
+/**
+ * Le transport a lâché : l'appel n'a pas répondu.
+ *
+ * À distinguer d'une erreur de base, parce que la conséquence n'est pas la
+ * même : une requête sans réponse n'est pas une requête qui n'a pas eu lieu.
+ * Une lecture se refait sans y penser ; une écriture, elle, a pu passer, et
+ * c'est tout l'objet de `writeId` plus bas.
+ *
+ * Côté joueur c'est un 503 : « réessaie », pas « c'est cassé ».
+ */
+class TransientError extends GameError {
+  constructor(readonly detail: string) {
+    super('Le serveur met du temps à répondre. Réessaie.', 503);
+    console.warn('[skyjo] appel perdu :', detail);
+  }
+}
+
+/**
+ * Une panne de transport, ou une vraie réponse de la base ?
+ *
+ * `status` vient de PostgREST : 0 quand la requête n'est jamais partie (réseau
+ * coupé, appel abandonné), 5xx quand c'est la passerelle qui a renoncé. Tout
+ * cela se retente. Le reste — 400, 404, une contrainte violée — est une
+ * réponse : la retenter donnerait deux fois la même.
+ */
+function isTransient(status: number, message: string): boolean {
+  if (status === 0 || status === 408 || status === 429 || status >= 500) return true;
+  return /abort|timeout|timed out|fetch failed|network|socket|econn/i.test(message);
+}
+
+/**
+ * La marque d'une écriture, posée dans l'état lui-même.
+ *
+ * Quand une écriture ne répond pas, on ne sait pas si elle a eu lieu. Relire ne
+ * suffit pas à trancher : trouver la version attendue en base ne dit pas qui
+ * l'a écrite — l'adversaire a pu jouer le même numéro pendant ce temps. Rejouer
+ * son coup sur un doute, c'est risquer de le jouer deux fois.
+ *
+ * D'où ce jeton, tiré au sort avant chaque écriture et transporté par l'état :
+ * s'il est là, c'est que l'écriture est passée. `applyAction` clone l'état, donc
+ * il survit aux coups suivants — un adversaire qui joue par-dessus ne l'efface
+ * pas, et c'est très bien : l'écriture avait bien eu lieu.
+ */
+type Stamped = GameState & { writeId?: string };
+
+function stampOf(state: GameState | null): string | undefined {
+  return (state as Stamped | null)?.writeId;
 }
 
 function randomCode(): string {
@@ -57,15 +126,23 @@ export function normalizeCode(code: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Le résultat d'une écriture sous verrou optimiste.
+ * Le résultat d'une écriture sous verrou optimiste. Trois issues, pas deux.
  *
- * En cas de collision, l'état frais accompagne le refus : sans lui, rejouer
- * son coup coûtait une relecture complète — un aller-retour de plus, sur le
- * chemin le plus chaud du jeu.
+ * `stale` : la version a bougé, quelqu'un a joué avant. L'état frais accompagne
+ * le refus — sans lui, rejouer son coup coûtait une relecture complète, un
+ * aller-retour de plus sur le chemin le plus chaud du jeu.
+ *
+ * `silent` : l'appel n'a pas répondu. Ce n'est pas un échec, c'est une absence
+ * de nouvelle — l'écriture a très bien pu avoir lieu. La confondre avec un
+ * échec, c'est rejouer le coup ; la confondre avec un succès, c'est le perdre.
+ * Seule la base peut trancher, et `writeId` est ce qui le lui permet.
  */
-type CommitResult = { ok: true } | { ok: false; state: GameState | null };
+export type CommitResult =
+  | { outcome: 'written' }
+  | { outcome: 'stale'; state: GameState | null }
+  | { outcome: 'silent' };
 
-interface Backend {
+export interface Backend {
   create(code: string, state: GameState): Promise<{ id: string } | 'code-taken'>;
   load(code: string): Promise<GameState | null>;
   /** Écrit seulement si la version en base est encore `expectedVersion`. */
@@ -84,32 +161,83 @@ function supabaseBackend(url: string, key: string): Backend {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  /**
+   * Un appel à la base, borné dans le temps et retenté si le transport lâche.
+   *
+   * `tries` dit combien de fois l'appel peut être répété **sans rien changer au
+   * monde** : deux pour une lecture, une seule pour une écriture, dont
+   * l'appelant doit d'abord aller vérifier si elle est passée.
+   */
+  async function call(
+    fn: string,
+    args: Record<string, unknown>,
+    what: string,
+    tries: number,
+  ): Promise<{ data: unknown; error: { code?: string; message: string } | null }> {
+    let last = '';
+    for (let attempt = 0; attempt < tries; attempt++) {
+      const { data, error, status } = await db
+        .rpc(fn, args)
+        .abortSignal(AbortSignal.timeout(RPC_TIMEOUT_MS));
+      if (!error || !isTransient(status, error.message)) return { data, error };
+      last = `${what} (${status || 'pas de réponse'}) : ${error.message}`;
+      // Une pause courte : la seconde tentative repart souvent sur une
+      // connexion déjà rouverte, et le coup est encore à l'écran.
+      if (attempt + 1 < tries) await new Promise((r) => setTimeout(r, 120));
+    }
+    throw new TransientError(last);
+  }
+
   return {
     async create(code, state) {
-      const { data, error } = await db.rpc('skyjo_create_game', { p_code: code, p_state: state });
+      const { data, error } = await call(
+        'skyjo_create_game',
+        { p_code: code, p_state: state },
+        'Création',
+        2,
+      );
       if (!error) return { id: data as string };
-      if (error.code === '23505') return 'code-taken'; // violation d'unicité
+      // Violation d'unicité. Deux cas, une seule conduite : le code est déjà
+      // pris par une autre partie, ou par notre propre première tentative dont
+      // la réponse s'est perdue. Dans les deux cas `createRoom` retire un code
+      // et recommence ; la partie fantôme, s'il y en a une, sera purgée.
+      if (error.code === '23505') return 'code-taken';
       throw new GameError(`Création impossible : ${error.message}`, 500);
     },
     async load(code) {
-      const { data, error } = await db.rpc('skyjo_load_game', { p_code: normalizeCode(code) });
+      const { data, error } = await call(
+        'skyjo_load_game',
+        { p_code: normalizeCode(code) },
+        'Lecture',
+        2,
+      );
       if (error) throw new GameError(`Lecture impossible : ${error.message}`, 500);
       return (data as GameState | null) ?? null;
     },
     async commit(state, expectedVersion) {
-      const { data, error } = await db.rpc('skyjo_commit_state', {
-        p_game_id: state.id,
-        p_expected_version: expectedVersion,
-        p_state: state,
-      });
-      if (error) throw new GameError(`Écriture impossible : ${error.message}`, 500);
+      let data: unknown;
+      try {
+        // Une seule tentative : une écriture qui ne répond pas a pu passer, et
+        // seul l'appelant sait comment lever le doute (cf. `writeId`).
+        const answer = await call(
+          'skyjo_commit_state',
+          { p_game_id: state.id, p_expected_version: expectedVersion, p_state: state },
+          'Écriture',
+          1,
+        );
+        if (answer.error) throw new GameError(`Écriture impossible : ${answer.error.message}`, 500);
+        data = answer.data;
+      } catch (error) {
+        if (error instanceof TransientError) return { outcome: 'silent' };
+        throw error;
+      }
       // Anciennes bases : la fonction rendait un booléen nu. Le coup se rejoue
       // alors comme avant, sur un état relu — c'est plus lent, pas faux.
-      if (data === true) return { ok: true };
-      if (data === false) return { ok: false, state: null };
+      if (data === true) return { outcome: 'written' };
+      if (data === false) return { outcome: 'stale', state: null };
       const result = data as { ok?: boolean; state?: GameState } | null;
-      if (result?.ok) return { ok: true };
-      return { ok: false, state: result?.state ?? null };
+      if (result?.ok) return { outcome: 'written' };
+      return { outcome: 'stale', state: result?.state ?? null };
     },
 
     /**
@@ -128,6 +256,10 @@ function supabaseBackend(url: string, key: string): Backend {
             { topic: gameChannel(state.code), event: VIEW_EVENT, payload: toSharedView(state) },
           ],
         }),
+        // Cette requête part après la réponse au joueur, mais elle tient la
+        // fonction en vie tant qu'elle dure : sans borne, une diffusion qui ne
+        // répond pas fait payer son silence à la requête suivante.
+        signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
       });
       if (!response.ok) {
         // Une diffusion ratée n'est pas une erreur de jeu : le coup est écrit,
@@ -155,10 +287,12 @@ function memoryBackend(): Backend {
     },
     async commit(state, expectedVersion) {
       const current = games.get(state.code);
-      if (!current) return { ok: false, state: null };
-      if (current.version !== expectedVersion) return { ok: false, state: structuredClone(current) };
+      if (!current) return { outcome: 'stale', state: null };
+      if (current.version !== expectedVersion) {
+        return { outcome: 'stale', state: structuredClone(current) };
+      }
       games.set(state.code, structuredClone(state));
-      return { ok: true };
+      return { outcome: 'written' };
     },
     // Pas de temps réel sans Supabase : en développement, les onglets se
     // rattrapent au sondage.
@@ -186,6 +320,18 @@ function db(): Backend {
     backend = memoryBackend();
   }
   return backend;
+}
+
+/**
+ * Installe un dos à la main. Réservé aux tests.
+ *
+ * C'est la seule façon de faire répondre la base comme elle répond quand elle
+ * va mal — une écriture qui part sans revenir — sans attendre qu'un joueur en
+ * fasse les frais. Passer `undefined` rend le choix au code normal.
+ */
+export function installBackend(next: Backend | undefined) {
+  backend = next;
+  recent.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -293,6 +439,12 @@ function announce(state: GameState) {
  * ce cache peut avoir un tour de retard, et « ce n'est pas ton tour » serait
  * alors un mensonge. On relit avant de trancher. Seul un refus prononcé sur un
  * état frais est rendu au joueur.
+ *
+ * Enfin, une écriture peut ne pas répondre du tout — la passerelle renonce au
+ * bout de cinq secondes, et ça arrive pour de vrai. Ce n'est pas un coup perdu :
+ * on relit, on regarde si le coup porte notre marque, et on ne le rejoue que
+ * s'il n'est pas passé. Un tel silence coûtait jusqu'ici le coup du joueur et
+ * un bandeau rouge.
  */
 export async function performAction(
   code: string,
@@ -302,9 +454,16 @@ export async function performAction(
   let state = recent.get(normalizeCode(code)) ?? null;
   let fresh = state === null;
   if (!state) state = await db().load(code);
+  const deadline = Date.now() + ACTION_BUDGET_MS;
 
   try {
     for (let attempt = 0; attempt < MAX_COMMIT_RETRIES; attempt++) {
+      // Six tentatives peuvent durer plus longtemps que la fonction n'a le droit
+      // de vivre. Mieux vaut rendre la main en disant « réessaie » qu'être coupé
+      // au milieu d'un coup : le joueur voit la même chose, mais lui peut agir.
+      if (attempt > 0 && Date.now() > deadline) {
+        throw new TransientError(`Action ${action.type} : plus de temps (${attempt} tentatives).`);
+      }
       if (!state) throw new GameError('Cette partie n’existe pas (ou plus).', 404);
 
       const result = applyAction(state, { ...action, playerId } as Action);
@@ -316,11 +475,32 @@ export async function performAction(
         continue;
       }
 
-      const written = await db().commit(result.state, state.version);
-      if (written.ok) {
-        remember(result.state);
-        announce(result.state);
-        return toView(result.state, playerId);
+      const stamped: Stamped = { ...result.state, writeId: crypto.randomUUID() };
+      const written = await db().commit(stamped, state.version);
+
+      if (written.outcome === 'written') {
+        remember(stamped);
+        announce(stamped);
+        return toView(stamped, playerId);
+      }
+
+      if (written.outcome === 'silent') {
+        // L'écriture n'a pas répondu, et la suite dépend de savoir si elle a eu
+        // lieu : la base seule peut le dire, et c'est la marque qui la fait
+        // parler. Sans elle, trouver la version attendue ne prouverait rien —
+        // l'adversaire a pu écrire le même numéro pendant ce temps.
+        const after = await db().load(code);
+        if (after && stampOf(after) === stamped.writeId) {
+          // Elle était passée. Il ne manquait que la réponse — et la diffusion,
+          // qui n'était pas partie non plus.
+          remember(after);
+          announce(after);
+          return toView(after, playerId);
+        }
+        state = after;
+        fresh = true;
+        if (state) remember(state);
+        continue;
       }
 
       // Quelqu'un a joué entre-temps. L'état frais vient avec le refus quand la
