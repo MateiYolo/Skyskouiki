@@ -88,12 +88,16 @@ export default function RulesPage() {
 
       <Section n="02" title="Mise en place">
         <p>
+          De <Key>2 à 8 joueurs</Key>. On joue dans l’ordre d’arrivée dans le salon, et le tour
+          fait le tour de la table.
+        </p>
+        <p>
           Chaque joueur reçoit <Key>12 cartes face cachée</Key>, en 3 lignes de 4 colonnes. Le reste
           forme la pioche, et la première carte retournée ouvre la défausse.
         </p>
         <p>
-          Chacun retourne <Key>2 cartes</Key> de son choix. Celui dont la somme des deux est la plus
-          haute commence.
+          Chacun retourne <Key>2 cartes</Key> de son choix, tout le monde en même temps. Celui dont
+          la somme des deux est la plus haute commence.
         </p>
       </Section>
 
@@ -314,7 +318,7 @@ export default function RulesPage() {
       <p className="border-t border-white/10 pt-6 text-xs leading-relaxed text-ink-faint">
         Le mode spicy n’a rien d’officiel non plus&nbsp;: ces quatre cartes n’existent pas dans la
         boîte. Skyjo est un jeu de Magilano. Skouikjo est une implémentation personnelle de ses règles,
-        sans lien avec l’éditeur, faite pour jouer à deux sur nos téléphones.
+        sans lien avec l’éditeur, faite pour jouer à plusieurs sur nos téléphones.
       </p>
 
       <Link

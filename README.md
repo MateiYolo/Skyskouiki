@@ -164,6 +164,24 @@ qu'un joker complète une colonne et une ligne du même coup, qu'il quitte alors
 la manche sans se poser sur aucune pile — une fois, même s'il a fermé les deux
 groupes — et qu'il perd son pouvoir dès qu'on pose une carte dessus.
 
+Tout ce fichier-là se joue à deux, parce que c'est le cas le plus fréquent et
+celui sur lequel chaque règle se lit le mieux.
+`src/lib/skyjo/multiplayer.test.ts` prend l'autre bout : des parties entières à
+trois, quatre, cinq et huit joueurs, jouées au hasard *parmi les coups légaux*
+sur des graines fixes. Ce qu'il attrape n'est pas une règle mais un blocage —
+une étape de tour dont aucun coup ne sort, une rotation qui saute quelqu'un, un
+dernier tour qui ne dure pas exactement un coup par adversaire. Ce que deux
+joueurs ne pouvaient pas tester, en somme : à deux, une rotation est un
+aller-retour et « le plus petit total » n'a qu'un concurrent. Le reste de ce que
+le passage à quatre change — écritures simultanées, lisibilité, dosage du mode
+spicy — est mesuré dans [`docs/AUDIT-MULTIJOUEUR.md`](docs/AUDIT-MULTIJOUEUR.md).
+
+`src/lib/server/contention.test.ts` tient le seul endroit du jeu où plusieurs
+joueurs écrivent en même temps : le retournement initial, qui revient à chaque
+manche. Il se joue contre un dos à latence, parce que sans elle les requêtes se
+sérialisent d'elles-mêmes et la contention n'existe pas — ce qui est exactement
+pourquoi le défaut ne se voyait pas en développement.
+
 `npm run smoke` joue deux parties complètes par HTTP, une par mode. Les règles
 du vol et du joker sont couvertes au coup par coup côté moteur, avec une graine
 fixe ; ce que le smoke vérifie en plus, c'est que les trois actions ajoutées

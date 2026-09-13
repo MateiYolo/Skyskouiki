@@ -11,11 +11,9 @@ import type { GameView } from './view';
  * et qui ne portent que de l'information publique.
  */
 
-export interface LastMove {
-  playerId: string;
-  /** Formulation courte, à la troisième personne : « prend le 4 ». */
-  text: string;
-}
+/** Le dernier coup de chaque joueur, par identifiant. Formulation courte, à la
+    troisième personne : « prend le 4 ». */
+export type LastMoves = Readonly<Record<string, string>>;
 
 /** Le nom d'une carte déplacée par un Vol ou une Valse, face cachée comprise. */
 function movedName(card: ValueCard | null): string {
@@ -65,21 +63,26 @@ function describe(event: GameEvent): string | null {
 }
 
 /**
- * Le dernier coup contenu dans `lastEvents`.
+ * Le dernier coup de chacun, tel que `lastEvents` le raconte.
  *
- * Le serveur ne garde que les événements de la dernière action : la phrase vaut
- * donc jusqu'au coup suivant, ce qui est exactement la durée pendant laquelle
- * elle sert.
+ * Un seul coup suffisait à deux joueurs : un lot d'événements ne contenait
+ * jamais que le coup d'en face. Mais `lastEvents` n'est pas toujours *un* coup —
+ * `eventsSince` rattrape volontairement plusieurs versions d'un seul rendu
+ * quand un client a pris du retard, et le sondage de secours, douze fois plus
+ * lent que le temps réel, tombe droit dans ce cas. À quatre joueurs, deux
+ * adversaires qui jouent dans le même rafraîchissement sont fréquents — et
+ * n'en montrer qu'un laissait l'autre changer sa grille sans un mot.
+ *
+ * Le plus récent gagne pour un joueur donné : sa phrase vaut jusqu'au coup
+ * suivant, ce qui est exactement la durée pendant laquelle elle sert.
  */
-export function lastMove(view: GameView): LastMove | null {
-  for (let i = view.lastEvents.length - 1; i >= 0; i--) {
-    const event = view.lastEvents[i];
+export function lastMoves(view: GameView): LastMoves {
+  const moves: Record<string, string> = {};
+  for (const event of view.lastEvents) {
     const text = describe(event);
-    if (text !== null && 'playerId' in event) {
-      return { playerId: event.playerId, text };
-    }
+    if (text !== null && 'playerId' in event) moves[event.playerId] = text;
   }
-  return null;
+  return moves;
 }
 
 /**

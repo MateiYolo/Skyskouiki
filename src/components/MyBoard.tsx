@@ -3,6 +3,7 @@
 import { memo } from 'react';
 import { Avatar, ScoreTiles } from './PlayerPanel';
 import { PlayerGrid, type ClearEcho, type SelectedTone } from './PlayerGrid';
+import { nextPlayerId } from '@/lib/skyjo';
 import type { GameView, ViewPlayer } from '@/lib/skyjo';
 
 /**
@@ -64,6 +65,17 @@ export const MyBoard = memo(function MyBoard({
    */
   const closedByMe = view.roundCloserId === view.you.id;
 
+  /**
+   * C'est à moi juste après.
+   *
+   * À deux, ça n'a jamais rien voulu dire — quand ce n'est pas mon tour, c'est
+   * le sien, et le suivant est forcément moi. À quatre, c'est la différence
+   * entre regarder et se préparer : savoir qu'on joue dans un tour plutôt que
+   * dans trois décide de ce qu'on espère trouver sur la défausse. Mutuellement
+   * exclusif avec « tu as fermé » dans les faits : qui a fermé ne rejoue plus.
+   */
+  const upNext = !closedByMe && nextPlayerId(view) === view.you.id;
+
   return (
     <div className="safe-bottom board-cap mx-auto flex min-h-0 w-full max-w-[26rem] flex-[5] flex-col px-3 pt-1.5">
       {/* Mon nom sert de repère, mes deux scores sont l'information : le compte
@@ -77,10 +89,16 @@ export const MyBoard = memo(function MyBoard({
               dépassait d'un cheveu les tuiles de score, ce qui suffisait à
               pousser la grille d'un pixel au moment exact où la manche se
               ferme. Aplatie, elle tient dans la hauteur que l'en-tête a déjà. */}
-          {closedByMe && (
+          {closedByMe ? (
             <span className="mt-0.5 block w-fit rounded-full bg-danger/20 px-1.5 py-0.5 text-[0.6rem] font-black uppercase leading-none tracking-[0.08em] text-danger">
               tu as fermé
             </span>
+          ) : (
+            upNext && (
+              <span className="mt-0.5 block w-fit rounded-full bg-accent/15 px-1.5 py-0.5 text-[0.6rem] font-black uppercase leading-none tracking-[0.08em] text-accent">
+                tu joues ensuite
+              </span>
+            )
           )}
         </div>
         <ScoreTiles round={me.visibleSum} total={me.totalScore} target={view.targetScore} />

@@ -230,6 +230,25 @@ function canSwap(me: ViewPlayer): boolean {
 }
 
 /**
+ * Qui joue après celui qui joue.
+ *
+ * À deux, la question ne se pose pas. À quatre, elle décide du coup : savoir
+ * s'il reste un tour ou trois avant le sien, c'est savoir si la carte de la
+ * défausse qu'on convoite sera encore là. L'ordre de `players` **est** l'ordre
+ * de jeu — il n'y a rien à calculer, il n'y avait rien d'affiché.
+ *
+ * Rend `null` pendant le dernier tour de celui qui clôt la manche : quand il
+ * ne reste qu'un coup à jouer, personne ne joue « ensuite ».
+ */
+export function nextPlayerId(view: SharedView): string | null {
+  if (view.phase !== 'playing' || view.currentPlayerId === null) return null;
+  if (view.finalTurnsLeft !== null && view.finalTurnsLeft <= 1) return null;
+  const seat = view.players.findIndex((p) => p.id === view.currentPlayerId);
+  if (seat === -1) return null;
+  return view.players[(seat + 1) % view.players.length].id;
+}
+
+/**
  * Les coups jouables, déduits de la vue seule.
  *
  * Écrite sur la vue et non sur l'état, et c'est tout l'enjeu : le navigateur

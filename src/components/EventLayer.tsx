@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { cue } from '@/lib/client/feedback';
+import { nudgeTurn } from '@/lib/client/nudge';
 import { clearDelay } from '@/lib/client/flights';
 import { FLIGHT_DURATION, FLIGHT_NEXT, MOVE, SETTLE } from '@/lib/client/motion';
 import { cardName, swappedPair } from '@/lib/skyjo';
@@ -55,7 +56,19 @@ let nextId = 1;
 
 export function EventLayer({ view }: { view: GameView }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [hero, setHero] = useState<Hero | null>(null);
+  /**
+   * Les annonces en attente, la plus ancienne devant.
+   *
+   * C'était une seule, remplacée à chaque lot d'événements — et un lot n'est
+   * pas toujours un coup. `eventsSince` rattrape volontairement plusieurs
+   * versions d'un coup pour un client en retard, et le sondage de secours,
+   * douze fois plus lent que le temps réel, tombe droit dans ce cas. À quatre
+   * joueurs, deux coups dans le même rafraîchissement sont fréquents, et ce
+   * qui se perdait alors, c'était « Colonne éliminée chez Charlotte » écrasée
+   * par « À toi » — c'est-à-dire la seule des deux qu'on ne pouvait pas
+   * deviner en regardant une vignette de vingt-trois pixels.
+   */
+  const [heroes, setHeroes] = useState<Hero[]>([]);
   const lastVersion = useRef<number>(-1);
   const lastCurrent = useRef<string | null>(null);
 
@@ -68,9 +81,13 @@ export function EventLayer({ view }: { view: GameView }) {
     const mine = (id: string) => id === view.you.id;
 
     const fresh: Toast[] = [];
-    let freshHero: Hero | null = null;
+    const queued: Hero[] = [];
 
     for (const event of view.lastEvents as GameEvent[]) {
+      // Une annonce au plus par événement, et elle part dans la file à la fin
+      // du tour de boucle : c'est ce qui empêche le second coup d'un lot
+      // d'effacer le premier.
+      let freshHero: Hero | null = null;
       switch (event.type) {
         case 'groupCleared': {
           // La petite gamme monte pendant que les cartes s'en vont, une note
@@ -278,6 +295,7 @@ export function EventLayer({ view }: { view: GameView }) {
         default:
           break;
       }
+      if (freshHero) queued.push(freshHero);
     }
 
     // Changement de tour. On peut avoir posé le téléphone : le son et la
@@ -289,8 +307,18 @@ export function EventLayer({ view }: { view: GameView }) {
       view.phase === 'playing'
     ) {
       cue('yourTurn');
-      // Une fermeture de manche mérite mieux qu'un « à toi » : on ne l'écrase pas.
-      freshHero ??= { id: nextId++, title: 'À toi', subtitle: undefined, tone: 'good' };
+      // Et un rappel système si le téléphone a été posé : à quatre joueurs on
+      // attend trois tours, et le son d'un onglet en arrière-plan ne joue pas.
+      nudgeTurn(
+        view.finalTurnsLeft !== null
+          ? 'Dernier tour de la manche.'
+          : `Manche ${view.round} · ton tour`,
+      );
+      // Une fermeture de manche mérite mieux qu'un « à toi », et une colonne
+      // éliminée aussi : « à toi » ne passe que s'il n'y a rien à raconter.
+      if (queued.length === 0) {
+        queued.push({ id: nextId++, title: 'À toi', subtitle: undefined, tone: 'good' });
+      }
     }
     lastCurrent.current = view.currentPlayerId;
 
@@ -298,7 +326,9 @@ export function EventLayer({ view }: { view: GameView }) {
     // sons et les vibrations déclenchés juste au-dessus.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (fresh.length) setToasts((t) => [...t, ...fresh].slice(-3));
-    if (freshHero) setHero(freshHero);
+    // Trois au plus : au-delà, la file raconterait la partie avec un tour de
+    // retard, ce qui est pire que de n'en rien dire.
+    if (queued.length) setHeroes((q) => [...q, ...queued].slice(-3));
   }, [view]);
 
   // Les toasts s'effacent tout seuls.
@@ -308,11 +338,19 @@ export function EventLayer({ view }: { view: GameView }) {
     return () => clearTimeout(timer);
   }, [toasts]);
 
+  // L'annonce du moment : la première de la file, et rien d'autre à l'écran.
+  const hero = heroes[0] ?? null;
+  const waiting = heroes.length > 1;
+
   useEffect(() => {
     if (!hero) return;
-    const timer = setTimeout(() => setHero(null), hero.hold ?? (hero.subtitle ? 2000 : 1100));
+    const full = hero.hold ?? (hero.subtitle ? 2000 : 1100);
+    // Une file qui s'allonge raconte la partie avec du retard : quand il y a
+    // quelque chose derrière, chaque annonce prend le temps d'être lue, pas
+    // celui d'être savourée.
+    const timer = setTimeout(() => setHeroes((q) => q.slice(1)), waiting ? Math.min(full, 1400) : full);
     return () => clearTimeout(timer);
-  }, [hero]);
+  }, [hero, waiting]);
 
   // Le titre de l'onglet : sur un autre onglet ou l'écran verrouillé, c'est le
   // seul endroit où l'on peut encore apprendre que c'est à soi.

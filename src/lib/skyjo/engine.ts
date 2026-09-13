@@ -99,6 +99,23 @@ const EVENT_LOG_SIZE = 24;
 const fail = (error: string): ActionResult => ({ ok: false, error });
 
 /**
+ * L'action n'avait plus rien à faire : quelqu'un l'a déjà jouée.
+ *
+ * Ce n'est ni une réussite ni un refus, et c'est bien le problème quand on n'a
+ * que ces deux-là. « Manche suivante » est proposé à *tout le monde* : à quatre
+ * joueurs, les quatre tapent, un seul arrive premier, et les trois autres
+ * lisaient « La manche n'est pas terminée » — un message qui non seulement ne
+ * leur apprend rien, mais leur dit le contraire de ce qu'ils viennent de voir.
+ * Leur intention est pourtant satisfaite : la manche suivante a commencé.
+ *
+ * D'où cette troisième issue. L'état revient inchangé — même version, aucun
+ * événement — ce que le magasin reconnaît pour ne rien écrire et rendre la vue
+ * courante (cf. `performAction`). Un doublon ne coûte donc ni une ligne en base
+ * ni un bandeau rouge.
+ */
+const alreadyDone = (state: GameState): ActionResult => ({ ok: true, state });
+
+/**
  * Applique une action. Fonction pure : l'état d'entrée n'est jamais muté.
  * Toute la validation (tour du joueur, étape, indices) se fait ici, côté serveur.
  */
@@ -398,15 +415,22 @@ export function applyAction(input: GameState, action: Action): ActionResult {
 
     // -- Enchaînement des manches -------------------------------------------
     case 'nextRound': {
-      if (s.phase !== 'roundOver') return fail('La manche n’est pas terminée.');
       if (!s.players.some((p) => p.id === action.playerId)) return fail('Joueur inconnu.');
+      // La manche suivante est déjà en cours : c'est un doublon, pas une faute
+      // (cf. `alreadyDone`).
+      if (s.phase === 'initialFlip' || s.phase === 'playing') return alreadyDone(s);
+      if (s.phase !== 'roundOver') return fail('La manche n’est pas terminée.');
       dealRound(s, events);
       return commit();
     }
 
     case 'playAgain': {
-      if (s.phase !== 'gameOver') return fail('La partie n’est pas terminée.');
       if (!s.players.some((p) => p.id === action.playerId)) return fail('Joueur inconnu.');
+      // Même course qu'au-dessus, sur le bouton « Revanche » — et ici le
+      // doublon coûterait plus cher qu'un message : rejouer `playAgain` remet
+      // tous les totaux à zéro.
+      if (s.phase === 'initialFlip' || s.phase === 'playing') return alreadyDone(s);
+      if (s.phase !== 'gameOver') return fail('La partie n’est pas terminée.');
       for (const p of s.players) {
         p.totalScore = 0;
         p.roundScores = [];
