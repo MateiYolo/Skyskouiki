@@ -10,6 +10,7 @@ import { MyBoard } from '@/components/MyBoard';
 import { OpponentSheet, OpponentStrip } from '@/components/OpponentStrip';
 import { TableCenter } from '@/components/TableCenter';
 import { GameOverPanel, RoundSummary } from '@/components/Overlays';
+import { VariantPicker } from '@/components/VariantPicker';
 import { useMoveEcho } from '@/lib/client/echo';
 import { EMOJIS, useIdentity } from '@/lib/client/identity';
 import { revealHold } from '@/lib/client/flights';
@@ -652,149 +653,96 @@ function Lobby({
   };
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6">
-      <div className="text-center">
-        <p className="text-xs uppercase tracking-[0.2em] text-ink-faint">code de la partie</p>
-        <p className="tnum mt-1 text-5xl font-black tracking-[0.24em] text-accent">
-          {view.code}
-        </p>
-      </div>
+    /* Le salon a grandi : le mode spicy y déplie ses quatre cartes, et sur un
+       écran de 640 pixels ça passe sous le pli. Le haut défile donc — centré
+       tant qu'il tient dans la hauteur — pendant que le bouton reste posé en
+       bas : lire ce que le mode ajoute ne doit jamais éloigner le geste qui
+       lance la partie. */
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-sm flex-col items-center justify-center gap-5 px-6 py-5">
+          <div className="text-center">
+            <p className="text-xs uppercase tracking-[0.2em] text-ink-faint">code de la partie</p>
+            <p className="tnum mt-1 text-5xl font-black tracking-[0.24em] text-accent">
+              {view.code}
+            </p>
+          </div>
 
-      <button
-        type="button"
-        onClick={share}
-        className="rounded-full border border-white/15 bg-white/8 px-5 py-2.5 text-sm font-semibold active:scale-95"
-      >
-        {copied ? 'Lien copié ✓' : 'Partager le lien'}
-      </button>
-
-      <div className="w-full max-w-xs">
-        <ul className="flex flex-wrap justify-center gap-2">
-          {view.players.map((player, seat) => (
-            <motion.li
-              key={player.id}
-              layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-center gap-2 rounded-full border border-white/12 bg-white/6 py-1.5 pl-2 pr-3.5"
-            >
-              {/* Le rang, parce qu'il n'est pas décoratif : l'ordre d'arrivée
-                  **est** l'ordre de jeu, et à quatre ça se décide au salon
-                  plutôt qu'à la première manche. */}
-              <span className="tnum text-[0.6rem] font-bold text-ink-faint">{seat + 1}</span>
-              <span className="text-lg" aria-hidden>
-                {player.emoji}
-              </span>
-              <span className="text-sm font-semibold">{player.name}</span>
-              {player.id === view.hostId && (
-                <span className="text-[0.6rem] text-ink-faint">hôte</span>
-              )}
-            </motion.li>
-          ))}
-        </ul>
-        <p className="mt-2 text-center text-[0.65rem] leading-snug text-ink-faint">
-          {view.players.length} {view.players.length > 1 ? 'joueurs' : 'joueur'} · 8 maximum ·
-          on joue dans cet ordre
-        </p>
-      </div>
-
-      <VariantPicker
-        variant={view.variant}
-        canChange={canSetVariant}
-        onChange={onSetVariant}
-      />
-
-      {view.you.isHost ? (
-        view.players.length < 2 ? (
-          // Un bouton jaune grisé vire au brun : mieux vaut un état d'attente assumé.
-          <p className="w-full max-w-xs rounded-2xl border border-dashed border-white/15 px-4 py-3.5 text-center text-sm text-ink-dim">
-            En attente d’un joueur…
-          </p>
-        ) : (
           <button
             type="button"
-            onClick={onStart}
-            disabled={busy}
-            className="w-full max-w-xs rounded-2xl bg-accent px-4 py-3.5 font-bold text-felt-900 transition active:scale-[0.98] disabled:opacity-40"
+            onClick={share}
+            className="rounded-full border border-white/15 bg-white/8 px-5 py-2.5 text-sm font-semibold active:scale-95"
           >
-            Lancer la partie
+            {copied ? 'Lien copié ✓' : 'Partager le lien'}
           </button>
-        )
-      ) : (
-        <p className="text-sm text-ink-dim">L’hôte lance la partie quand tout le monde est là.</p>
-      )}
 
-      <Link href="/regles" className="text-xs text-ink-faint underline underline-offset-4">
-        Revoir les règles
-      </Link>
-    </div>
-  );
-}
+          <div className="w-full">
+            <ul className="flex flex-wrap justify-center gap-2">
+              {view.players.map((player, seat) => (
+                <motion.li
+                  key={player.id}
+                  layout
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center gap-2 rounded-full border border-white/12 bg-white/6 py-1.5 pl-2 pr-3.5"
+                >
+                  {/* Le rang, parce qu'il n'est pas décoratif : l'ordre d'arrivée
+                      **est** l'ordre de jeu, et à quatre ça se décide au salon
+                      plutôt qu'à la première manche. */}
+                  <span className="tnum text-[0.6rem] font-bold text-ink-faint">{seat + 1}</span>
+                  <span className="text-lg" aria-hidden>
+                    {player.emoji}
+                  </span>
+                  <span className="text-sm font-semibold">{player.name}</span>
+                  {player.id === view.hostId && (
+                    <span className="text-[0.6rem] text-ink-faint">hôte</span>
+                  )}
+                </motion.li>
+              ))}
+            </ul>
+            <p className="mt-2 text-center text-[0.65rem] leading-snug text-ink-faint">
+              {view.players.length} {view.players.length > 1 ? 'joueurs' : 'joueur'} · 8 maximum ·
+              on joue dans cet ordre
+            </p>
+          </div>
 
-/**
- * Le choix du mode, dans le salon.
- *
- * C'est le premier réglage de partie de l'application, et il ne vit que là :
- * le mode décide de la composition du paquet, donc il se fige à la
- * distribution. Les invités le lisent sans pouvoir le changer — mais ils le
- * lisent, parce qu'arriver dans une partie et découvrir un joker en cours de
- * manche n'est pas une surprise agréable.
- */
-function VariantPicker({
-  variant,
-  canChange,
-  onChange,
-}: {
-  variant: Variant;
-  canChange: boolean;
-  onChange: (variant: Variant) => void;
-}) {
-  const spicy = variant === 'spicy';
-  const note = spicy
-    ? 'Deux -5, deux jokers, cinq Vol et quatre Valse glissés dans le paquet.'
-    : 'Le paquet officiel, rien de plus.';
-
-  return (
-    <div className="w-full max-w-xs">
-      <p className="mb-1.5 text-center text-[0.6rem] uppercase tracking-[0.2em] text-ink-faint">
-        mode
-      </p>
-
-      {canChange ? (
-        <div className="flex gap-1 rounded-2xl border border-white/12 bg-white/5 p-1">
-          {(['classic', 'spicy'] as const).map((option) => {
-            const on = option === variant;
-            return (
-              <button
-                key={option}
-                type="button"
-                onClick={() => onChange(option)}
-                aria-pressed={on}
-                className={[
-                  'flex-1 rounded-xl px-3 py-2 text-sm font-bold transition active:scale-[0.98]',
-                  on
-                    ? option === 'spicy'
-                      ? 'bg-steal/25 text-steal ring-1 ring-steal/60'
-                      : 'bg-white/12 text-ink ring-1 ring-white/25'
-                    : 'text-ink-dim',
-                ].join(' ')}
-              >
-                {option === 'spicy' ? 'Spicy' : 'Classique'}
-              </button>
-            );
-          })}
+          <VariantPicker
+            variant={view.variant}
+            canChange={canSetVariant}
+            onChange={onSetVariant}
+          />
         </div>
-      ) : (
-        <p
-          className={`rounded-2xl border px-4 py-2.5 text-center text-sm font-bold ${
-            spicy ? 'border-steal/50 bg-steal/12 text-steal' : 'border-white/12 bg-white/5 text-ink'
-          }`}
-        >
-          {spicy ? 'Spicy' : 'Classique'}
-        </p>
-      )}
+      </div>
 
-      <p className="mt-1.5 text-center text-[0.68rem] leading-snug text-ink-dim">{note}</p>
+      <div className="safe-bottom shrink-0 border-t border-white/8 bg-felt-900/80 px-6 pb-3 pt-3 backdrop-blur-sm">
+        <div className="mx-auto flex w-full max-w-xs flex-col items-center gap-2">
+          {view.you.isHost ? (
+            view.players.length < 2 ? (
+              // Un bouton jaune grisé vire au brun : mieux vaut un état d'attente assumé.
+              <p className="w-full rounded-2xl border border-dashed border-white/15 px-4 py-3.5 text-center text-sm text-ink-dim">
+                En attente d’un joueur…
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={onStart}
+                disabled={busy}
+                className="w-full rounded-2xl bg-accent px-4 py-3.5 font-bold text-felt-900 transition active:scale-[0.98] disabled:opacity-40"
+              >
+                Lancer la partie
+              </button>
+            )
+          ) : (
+            <p className="text-center text-sm text-ink-dim">
+              L’hôte lance la partie quand tout le monde est là.
+            </p>
+          )}
+
+          <Link href="/regles" className="text-xs text-ink-faint underline underline-offset-4">
+            Revoir les règles
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
