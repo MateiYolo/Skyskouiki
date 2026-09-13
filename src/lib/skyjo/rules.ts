@@ -56,9 +56,17 @@ export const SPICY_COMPOSITION: ReadonlyArray<readonly [value: number, count: nu
  * Nombre de cartes Vol glissées dans la pioche en mode spicy.
  *
  * Cinq, parce qu'un Vol ne se déclenche qu'en étant *pioché* (cf.
- * `seedSpecialCards`) : ça fait un peu plus d'un demi Vol par manche à deux
- * joueurs et près d'un et demi à quatre. Deux cartes ne sortiraient quasiment
- * jamais, huit feraient de l'échange le jeu principal.
+ * `seedSpecialCards`). Mesuré sur cent cinquante parties par configuration :
+ * **un Vol par manche à deux joueurs, un peu plus de deux à quatre** — une
+ * manche à quatre dure deux fois plus de coups, donc on pioche deux fois plus.
+ * Deux cartes ne sortiraient quasiment jamais, huit feraient de l'échange le
+ * jeu principal.
+ *
+ * Le nombre ne dépend volontairement pas du nombre de joueurs. À six et huit
+ * l'échange devient effectivement le jeu principal (plus de quatre Vol par
+ * manche à six), et c'est assumé : le mode spicy est une règle maison, et la
+ * table qui le choisit à huit cherche exactement ça. Ce qui compte pour le
+ * dosage, c'est le jeu à deux et quatre, où il tient.
  */
 export const STEAL_COUNT = 5;
 

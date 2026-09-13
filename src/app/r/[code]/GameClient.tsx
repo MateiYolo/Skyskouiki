@@ -15,8 +15,9 @@ import { EMOJIS, useIdentity } from '@/lib/client/identity';
 import { revealHold } from '@/lib/client/flights';
 import { MOVE } from '@/lib/client/motion';
 import { armAudio, cue, initAudio, isMuted, setMuted } from '@/lib/client/feedback';
+import { disableNudge, enableNudge, nudgeState, type NudgeState } from '@/lib/client/nudge';
 import { useGame } from '@/lib/client/useGame';
-import { heldSummary, lastMove } from '@/lib/skyjo';
+import { heldSummary, lastMoves, nextPlayerId } from '@/lib/skyjo';
 import type { GameView, LegalAction, Variant } from '@/lib/skyjo';
 
 /** Ce que le joueur doit faire, là, maintenant. */
@@ -30,7 +31,13 @@ function prompt(
 
   switch (view.phase) {
     case 'lobby':
-      return { title: 'Salon', hint: 'Partage le code, on démarre à deux.' };
+      return {
+        title: 'Salon',
+        hint:
+          view.players.length < 2
+            ? 'Partage le code, on démarre à deux.'
+            : 'Partage le code, on peut jouer jusqu’à huit.',
+      };
     case 'initialFlip':
       return me && me.faceUpCount < 2
         ? { title: 'Retourne 2 cartes', hint: 'Le plus gros total commence.' }
@@ -52,7 +59,12 @@ function prompt(
               'Tu ne joues plus : le plus petit total, sinon il double.'
             : closing
               ? 'Son dernier coup, puis on compte.'
-              : 'Observe et prépare ton coup.',
+              : // À deux, « ensuite, c'est moi » n'a pas besoin d'être dit. À
+                // quatre, c'est la moitié de la décision : savoir s'il reste un
+                // tour ou trois dit si la défausse qu'on convoite sera encore là.
+                nextPlayerId(view) === view.you.id
+                ? 'Tu joues juste après : prépare ton coup.'
+                : 'Observe et prépare ton coup.',
         };
       }
       if (view.turnStep === 'choose') {
@@ -283,7 +295,7 @@ export function GameClient({ code }: { code: string }) {
     [view],
   );
 
-  const move = useMemo(() => (view ? lastMove(view) : null), [view]);
+  const moves = useMemo(() => (view ? lastMoves(view) : {}), [view]);
 
   /**
    * La manche est fermée : il ne reste qu'un coup à chacun.
@@ -301,8 +313,15 @@ export function GameClient({ code }: { code: string }) {
 
   // Qui tient la carte posée au milieu de la table. Sans nom dessus, elle
   // n'appartient à personne et un tour d'adversaire se lit comme un décor.
+  // Les deux cartes spéciales occupent le créneau de la carte en main sans rien
+  // « tenir » au sens du moteur : il faut donc les nommer toutes les deux ici,
+  // comme `TableCenter` le fait. La Valse manquait — sa carte turquoise
+  // apparaissait au milieu de la table sans dire à qui elle était, ce qui à
+  // deux se devinait et à quatre ne se devine plus.
   const holderId =
-    view?.heldFrom !== null || view?.turnStep === 'stealing' ? view?.currentPlayerId : null;
+    view?.heldFrom !== null || view?.turnStep === 'stealing' || view?.turnStep === 'swapping'
+      ? view?.currentPlayerId
+      : null;
   const holder = useMemo(() => {
     const carrier = holderId ? view?.players.find((p) => p.id === holderId) : null;
     return carrier
@@ -401,7 +420,7 @@ export function GameClient({ code }: { code: string }) {
           <OpponentStrip
             view={view}
             opponents={opponents}
-            move={move}
+            moves={moves}
             echo={echo}
             picking={stealFrom !== null}
             onOpen={setInspecting}
@@ -649,23 +668,35 @@ function Lobby({
         {copied ? 'Lien copié ✓' : 'Partager le lien'}
       </button>
 
-      <ul className="flex flex-wrap justify-center gap-2">
-        {view.players.map((player) => (
-          <motion.li
-            key={player.id}
-            layout
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-center gap-2 rounded-full border border-white/12 bg-white/6 py-1.5 pl-2 pr-3.5"
-          >
-            <span className="text-lg" aria-hidden>
-              {player.emoji}
-            </span>
-            <span className="text-sm font-semibold">{player.name}</span>
-            {player.id === view.hostId && <span className="text-[0.6rem] text-ink-faint">hôte</span>}
-          </motion.li>
-        ))}
-      </ul>
+      <div className="w-full max-w-xs">
+        <ul className="flex flex-wrap justify-center gap-2">
+          {view.players.map((player, seat) => (
+            <motion.li
+              key={player.id}
+              layout
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center gap-2 rounded-full border border-white/12 bg-white/6 py-1.5 pl-2 pr-3.5"
+            >
+              {/* Le rang, parce qu'il n'est pas décoratif : l'ordre d'arrivée
+                  **est** l'ordre de jeu, et à quatre ça se décide au salon
+                  plutôt qu'à la première manche. */}
+              <span className="tnum text-[0.6rem] font-bold text-ink-faint">{seat + 1}</span>
+              <span className="text-lg" aria-hidden>
+                {player.emoji}
+              </span>
+              <span className="text-sm font-semibold">{player.name}</span>
+              {player.id === view.hostId && (
+                <span className="text-[0.6rem] text-ink-faint">hôte</span>
+              )}
+            </motion.li>
+          ))}
+        </ul>
+        <p className="mt-2 text-center text-[0.65rem] leading-snug text-ink-faint">
+          {view.players.length} {view.players.length > 1 ? 'joueurs' : 'joueur'} · 8 maximum ·
+          on joue dans cet ordre
+        </p>
+      </div>
 
       <VariantPicker
         variant={view.variant}
@@ -768,6 +799,50 @@ function VariantPicker({
   );
 }
 
+/**
+ * Le rappel « c'est à toi », proposé et jamais imposé.
+ *
+ * La permission ne se demande qu'au tap : une application qui ouvre la boîte de
+ * dialogue toute seule à l'arrivée se fait refuser une fois pour toutes.
+ */
+function NudgeRow() {
+  const [state, setState] = useState<NudgeState>('off');
+
+  // Lecture d'un système externe (le navigateur), donc après le montage.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setState(nudgeState()), []);
+
+  if (state === 'unsupported') return null;
+
+  const toggle = async () => {
+    if (state === 'on') {
+      disableNudge();
+      setState('off');
+      return;
+    }
+    setState(await enableNudge());
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => void toggle()}
+        disabled={state === 'denied'}
+        className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm active:bg-white/10 disabled:opacity-50"
+      >
+        <span>Me prévenir</span>
+        <span>{state === 'on' ? '🔔' : '🔕'}</span>
+      </button>
+      {state === 'denied' && (
+        <p className="px-3 pb-1 text-[0.62rem] leading-snug text-ink-faint">
+          Les notifications sont bloquées pour ce site.
+        </p>
+      )}
+    </>
+  );
+}
+
 function SettingsSheet({
   code,
   muted,
@@ -805,6 +880,10 @@ function SettingsSheet({
           <span>Sons</span>
           <span>{muted ? '🔇' : '🔊'}</span>
         </button>
+        {/* À quatre joueurs on attend trois tours : le téléphone finit par être
+            posé, et ni le son ni la vibration ne le rattrapent depuis un onglet
+            en arrière-plan. */}
+        <NudgeRow />
         <Link
           href="/regles"
           className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm active:bg-white/10"

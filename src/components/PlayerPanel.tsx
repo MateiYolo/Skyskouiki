@@ -83,24 +83,42 @@ export function ScoreTiles({
   total,
   target,
   size = 'md',
+  full = false,
 }: {
   round: number;
   total: number;
   target: number;
-  size?: 'sm' | 'md';
+  /**
+   * `xs` est la taille des colonnes d'adversaires à trois joueurs et plus : un
+   * panneau y fait cent vingt pixels, et c'est là que ces deux chiffres
+   * comptent le plus — voir `full`.
+   */
+  size?: 'xs' | 'sm' | 'md';
+  /**
+   * Les deux tuiles se partagent la largeur qu'on leur donne au lieu de se
+   * serrer autour de leur contenu.
+   *
+   * En colonne étroite, le total tenait dans une ligne de texte tronquée à
+   * côté du nom : un score à trois chiffres s'y affichait « 126… », c'est-à-dire
+   * illisible précisément quand il commence à décider de la partie. Étalées sur
+   * toute la largeur du panneau, les deux tuiles ont la place qu'il faut.
+   */
+  full?: boolean;
 }) {
   const hot = total >= target * 0.75;
-  const num = size === 'sm' ? 'text-[0.95rem]' : 'text-[1.15rem]';
-  const pad = size === 'sm' ? 'px-2 py-0.5' : 'px-2.5 py-1';
+  const num =
+    size === 'xs' ? 'text-[0.78rem]' : size === 'sm' ? 'text-[0.95rem]' : 'text-[1.15rem]';
+  const pad = size === 'xs' ? 'px-1 py-px' : size === 'sm' ? 'px-2 py-0.5' : 'px-2.5 py-1';
+  const tile = full ? 'min-w-0 flex-1' : '';
 
   return (
-    <div className="flex shrink-0 items-stretch gap-1">
+    <div className={`flex items-stretch gap-1 ${full ? 'w-full' : 'shrink-0'}`}>
       <Tile
         label="manche"
         value={round}
         num={num}
         pad={pad}
-        className="bg-white/[0.07] text-ink"
+        className={`bg-white/[0.07] text-ink ${tile}`}
         delta
       />
       <Tile
@@ -108,7 +126,7 @@ export function ScoreTiles({
         value={total}
         num={num}
         pad={pad}
-        className={hot ? 'bg-danger/20 text-danger' : 'bg-accent/15 text-accent'}
+        className={`${hot ? 'bg-danger/20 text-danger' : 'bg-accent/15 text-accent'} ${tile}`}
       />
     </div>
   );

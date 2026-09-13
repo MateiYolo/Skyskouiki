@@ -12,6 +12,11 @@ reste des problèmes est de l'interface et de l'information : la table sait joue
 à quatre, l'écran a été dessiné pour deux, et trois choses qu'on lisait
 gratuitement en face-à-face ne se lisent plus.
 
+**État.** Chaque constat porte sa suite : **corrigé**, ou **écarté** avec la
+raison. Deux ont été écartés sciemment — le dosage du mode spicy à six et huit
+joueurs, et le joueur qui ferme son onglet. Tout le reste est fait ; §5 en tient
+le compte.
+
 ---
 
 ## 1. Ce qui tient
@@ -83,7 +88,7 @@ dimensionné ; rien à faire de ce côté.
 
 ## 2. Ce qui casse
 
-### 2.1 — Le retournement initial rate à 4 joueurs et plus · **important**
+### 2.1 — Le retournement initial rate à 4 joueurs et plus · **corrigé**
 
 C'est le seul moment du jeu où tout le monde écrit en même temps, et il revient
 **à chaque manche**. Quatre joueurs retournant deux cartes, ce sont huit
@@ -134,7 +139,7 @@ même joueur (elle est explicitement désactivée pour `flipInitial` dans
 `useGame`, à raison : ce sont les joueurs *entre eux* qui se marchent dessus,
 pas les deux coups d'un même joueur).
 
-### 2.2 — Trois joueurs sur quatre reçoivent une erreur rouge à chaque fin de manche · **important**
+### 2.2 — Trois joueurs sur quatre reçoivent une erreur rouge à chaque fin de manche · **corrigé**
 
 `nextRound` et `playAgain` sont légaux pour **tout le monde**
 (`legalActionsFrom`). À la fin d'une manche, les quatre joueurs voient le bouton
@@ -172,7 +177,7 @@ la table se retourner.
 Le (1) est à faire dans tous les cas : il coûte trois lignes et supprime le
 message trompeur.
 
-### 2.3 — Un joueur absent bloque la partie pour de bon · **important**
+### 2.3 — Un joueur absent bloque la partie pour de bon · **écarté**
 
 `leave` existe dans le moteur (il retire du salon, marque `connected: false` en
 cours de partie) et dans le schéma de validation. **Aucun client ne l'envoie
@@ -189,19 +194,22 @@ jamais** — `grep leave src/` ne trouve que la définition. Donc :
 À quatre, c'est un jeu de quatre personnes perdu parce qu'une a fermé son
 onglet, et la probabilité que ça arrive est trois fois plus grande.
 
-**Correctif.** Il y a trois morceaux, indépendants :
-- **dire la vérité** : envoyer `leave` sur `pagehide`/`visibilitychange` (pas
-  `beforeunload`, qui ne part pas sur iOS) via `navigator.sendBeacon`, ou faire
-  vieillir `connected` côté serveur sur la base des requêtes reçues. La pastille
-  grise de l'avatar se met alors à servir ;
-- **débloquer le tour** : passer son tour au joueur suivant quand le courant est
-  déconnecté depuis assez longtemps. C'est une règle de jeu, donc elle se
-  décide — un tour sauté n'est pas neutre (le joueur ne retourne pas de carte,
-  donc il ne ferme jamais), mais c'est toujours mieux qu'une table figée ;
-- **pouvoir virer quelqu'un** du salon, avant la distribution. C'est de loin le
-  plus facile et ça couvre le cas le plus fréquent (le doublon).
+**Écarté, et volontairement.** L'usage réel du jeu est quatre personnes autour
+d'une table : si l'une d'elles s'arrête, les trois autres relancent une partie
+plutôt que d'attendre un mécanisme de reprise. Le correctif complet — faire
+vieillir `connected`, sauter le tour d'un absent, permettre d'exclure quelqu'un
+du salon — coûte une règle de jeu supplémentaire (un tour sauté n'est pas
+neutre : celui qui ne retourne pas de carte ne ferme jamais la manche) pour un
+cas qu'un « on recommence » règle en dix secondes.
 
-### 2.4 — Le score d'un adversaire est tronqué · **petit, mais visible tout le temps**
+Ce qui reste vrai et non résolu, si le sujet revient : la pastille « déconnecté »
+de `Avatar` ne s'allume jamais, parce que `connected` ne redescend jamais. Trois
+morceaux, indépendants — envoyer `leave` sur `pagehide` via `sendBeacon` ou faire
+vieillir l'état côté serveur ; sauter le tour d'un absent ; pouvoir exclure
+quelqu'un du salon avant la distribution. Le dernier est le moins cher et couvre
+le cas le plus fréquent (le doublon d'un joueur qui a rouvert le lien ailleurs).
+
+### 2.4 — Le score d'un adversaire est tronqué · **corrigé**
 
 Dans `OpponentStrip`, hors face-à-face, le panneau fait 120 px de large et la
 ligne de score est un `truncate` de 0,62 rem qui partage sa largeur avec le nom
@@ -212,7 +220,7 @@ C'est le chiffre qui décide de tout en fin de partie, et il est illisible pile
 au moment où il commence à compter. À deux, ce cas n'existe pas : le face-à-face
 utilise `ScoreTiles`, qui a la place.
 
-### 2.5 — En dessous de 375 px, un adversaire est rogné et inatteignable · **petit**
+### 2.5 — En dessous de 375 px, un adversaire est rogné et inatteignable · **corrigé**
 
 La bande est `overflow-x-auto`, mais `justify-center` quand il y a trois
 adversaires ou moins. C'est le piège classique : un conteneur centré qui déborde
@@ -229,11 +237,15 @@ Chromium :
 | 360 px (beaucoup d'Android) | x = **−8** | oui, 8 px |
 | 320 px | x = **−28** | oui, 28 px |
 
-**Correctif** : `justify-center` → centrage par marge automatique (`mx-auto` sur
-un conteneur interne) ou `justify-content: safe center`, et étendre `fade-right`
-à `opponents.length > 2`. Deux mots de CSS.
+**Corrigé** : `justify-center` → `justify-center-safe` (le mot-clé `safe` de
+`justify-content`, qui retombe sur un alignement au début dès que ça déborde), et
+le fondu ne dépend plus du nombre d'adversaires mais du débordement réellement
+mesuré — à gauche, à droite ou des deux côtés, ce qui sert au défilement
+automatique du §3.6. Re-mesuré après coup : à 320, 360 et 375 px, le premier
+panneau est à `x = 12`, plus rien n'est rogné, et tout est atteignable au
+défilement.
 
-### 2.6 — La Valse n'a pas de propriétaire au milieu de la table · **petit**
+### 2.6 — La Valse n'a pas de propriétaire au milieu de la table · **corrigé**
 
 `GameClient` :
 
@@ -256,7 +268,7 @@ encore (`heldSummary`), l'emplacement non.
 Ces points ne sont pas des bugs : ce sont des informations qu'on lisait
 gratuitement en face-à-face et qui disparaissent à trois.
 
-### 3.1 — Le score de manche des adversaires · **le plus utile de la liste**
+### 3.1 — Le score de manche des adversaires · **corrigé**
 
 En face-à-face, l'adversaire porte `ScoreTiles` : **manche** (sa somme visible)
 et **total**. À trois joueurs et plus, le panneau se réduit à `{totalScore} pts`
@@ -271,20 +283,28 @@ importante du jeu devient un calcul mental au moment où elle se pose.
 C'est aussi ce qui rend le risque de doublement opaque : on ferme sans savoir
 contre qui.
 
-**Piste** : la somme visible tient en deux ou trois caractères. Elle peut aller
-à la place de « 0 pts » (`12 · 45`), ou dans un coin de la grille, ou remplacer
-la jauge du bas de panneau, qui est la moins informative des trois.
+**Corrigé** : les deux tuiles `manche` / `total` descendent en bas du panneau,
+sur toute sa largeur, à la place de la jauge — qui disait la même chose que le
+total en moins précis. La couleur reprend son travail (le total vire au rouge en
+approchant du seuil), et le « +12 » qui s'échappe de la tuile marche désormais
+aussi sur les adversaires : on voit ce que le coup d'en face vient de coûter.
 
-### 3.2 — Qui joue après moi
+### 3.2 — Qui joue après moi · **corrigé**
 
 À deux, la question ne se pose pas. À quatre, savoir s'il reste un tour ou trois
 avant le sien change tout : c'est ce qui dit si la carte de la défausse qu'on
 convoite sera encore là. L'information est dans la vue (l'ordre de
 `view.players` **est** l'ordre de jeu, `currentPlayerIndex` avance dedans), il
-n'y a rien à calculer — juste rien d'affiché. Un liseré discret « ensuite » sur
-le panneau suivant, ou un compteur « tu joues dans 2 », suffirait.
+n'y a rien à calculer — juste rien d'affiché.
 
-### 3.3 — Les annonces se perdent quand deux coups arrivent ensemble
+**Corrigé** : `nextPlayerId` (dans `view.ts`, à côté de `legalActionsFrom`) rend
+le siège suivant, et `null` pendant le dernier tour — quand il ne reste qu'un
+coup, personne ne joue « ensuite ». Il sert trois fois : le panneau du suivant
+porte la mention « ensuite » et un liseré ambre discret, ma propre grille porte
+« tu joues ensuite », et la consigne dit « Tu joues juste après » au lieu de
+« Observe et prépare ton coup ».
+
+### 3.3 — Les annonces se perdent quand deux coups arrivent ensemble · **corrigé**
 
 `EventLayer` garde **une seule** annonce (`freshHero`) par lot d'événements, et
 la dernière écrase les précédentes. Ce n'est pas théorique : `eventsSince`
@@ -299,11 +319,16 @@ Même remarque, en plus léger, pour `lastMove` (`moves.ts`) : il ne rend **que 
 dernier** coup du lot, donc la phrase « pose 3, jette 7 » ne s'affiche que sur
 un panneau, même quand deux joueurs ont joué depuis le dernier rendu.
 
-**Piste** : faire de `hero` une petite file (deux ou trois, enchaînées), comme
-les toasts le font déjà — ou au minimum ne jamais laisser une élimination se
-faire écraser par un simple « À toi ».
+**Corrigé** : `hero` devient une file de trois au plus, comme les toasts. Une
+annonce au plus par *événement* (la déclaration descend dans la boucle, et chaque
+tour de boucle pousse la sienne), « À toi » ne passe plus que s'il n'y a rien
+d'autre à raconter, et quand la file s'allonge chaque annonce est raccourcie à
+1,4 s — au-delà, elle raconterait la partie avec un tour de retard, ce qui est
+pire que de se taire. `lastMove` devient `lastMoves` du même coup : un coup par
+joueur, donc deux adversaires qui ont joué dans le même rafraîchissement
+apparaissent tous les deux.
 
-### 3.4 — L'attente triple, et rien ne la comble hors de l'écran
+### 3.4 — L'attente triple, et rien ne la comble hors de l'écran · **corrigé en partie**
 
 À quatre joueurs, on regarde jouer les trois quarts du temps (§1). Le seul
 signal de « c'est à toi » hors de l'écran est `cue('yourTurn')` — son et
@@ -312,11 +337,22 @@ l'écran est verrouillé ou l'onglet en arrière-plan : iOS ne connaît pas
 `navigator.vibrate`, et un onglet Safari en arrière-plan ne joue rien. Il n'y a
 pas de notification web.
 
-Ce n'est pas un correctif d'après-midi, mais c'est la contrainte principale
-d'une partie à quatre : les gens posent le téléphone, et il faut pouvoir les
-rappeler.
+**Corrigé en partie** : `src/lib/client/nudge.ts` ajoute une notification
+système « À toi de jouer ! », et le menu ⚙ un interrupteur « Me prévenir ». Trois
+principes : la permission n'est demandée qu'au moment où le joueur active le
+réglage lui-même (une application qui ouvre la boîte de dialogue à l'arrivée se
+fait refuser une fois pour toutes), rien ne s'affiche tant que la page est
+visible — le liseré, le son et l'annonce font déjà le travail —, et un `tag` fixe
+remplace la notification du tour précédent au lieu de l'empiler.
 
-### 3.5 — Le salon ment un peu
+« En partie », parce que la limite reste : c'est une notification locale, pas une
+notification poussée depuis un serveur. Sur iPhone, l'API n'existe que si la page
+a été ajoutée à l'écran d'accueil, et un téléphone verrouillé peut geler l'onglet
+avant que le coup n'arrive. Le vrai push demanderait un service worker, des clés
+VAPID et un abonnement stocké côté serveur — c'est-à-dire le premier état
+persistant par joueur d'une application qui n'a pas de comptes.
+
+### 3.5 — Le salon ment un peu · **corrigé**
 
 `prompt()` rend, en phase `lobby` : *« Partage le code, on démarre à deux. »* —
 lu par un groupe de quatre qui attend le cinquième, c'est faux. Il n'y a par
@@ -325,7 +361,14 @@ d'arrivée est l'ordre de jeu**, ce qui à quatre est une information de jeu.
 Enfin la page Règles se termine sur « faite pour jouer à deux sur nos
 téléphones » et ne dit nulle part combien on peut être.
 
-### 3.6 — À cinq et plus, le joueur actif peut être hors de l'écran
+**Corrigé** : chaque joueur du salon porte son rang, et une ligne dessous dit
+« 4 joueurs · 8 maximum · on joue dans cet ordre ». La page Règles ouvre sa mise
+en place sur « de 2 à 8 joueurs », précise que le retournement initial se fait
+en même temps, et ne prétend plus avoir été faite pour jouer à deux. (La phrase
+du salon dans `prompt()` était par ailleurs du code mort — l'écran de salon ne
+l'affiche nulle part — mais elle a été réparée aussi, tant qu'à faire.)
+
+### 3.6 — À cinq et plus, le joueur actif peut être hors de l'écran · **corrigé**
 
 Hors scope de la question posée, mais mesuré en passant : à huit joueurs sur
 390 px, la bande mesure 912 px pour 390 visibles — **48 cartes sur 96 sont hors
@@ -335,13 +378,17 @@ qu'aucun des trois panneaux affichés ne porte l'anneau d'activité. La couche d
 vol (`FlightLayer`) mesure par ailleurs des ancres hors viewport, donc les
 cartes volent vers un point qu'on ne voit pas.
 
-Le README annonce « à deux (ou à huit) ». Soit la bande défile toute seule
-jusqu'au joueur actif (un `scrollIntoView` sur changement de tour), soit le
-maximum annoncé descend à cinq ou six.
+**Corrigé** : la bande défile toute seule jusqu'au joueur actif, et seulement
+s'il n'est pas déjà visible — sinon le moindre coup la ramènerait à sa place et
+on ne pourrait plus regarder tranquillement la grille d'un autre. Vérifié à huit
+joueurs en pilotant un vrai navigateur : au troisième tour, la bande passe d'
+elle-même à `scrollLeft: 261` et le joueur annoncé par la consigne est sous les
+yeux. Le fondu suit (à gauche, à droite, ou des deux côtés) et
+`prefers-reduced-motion` coupe l'animation du défilement.
 
 ---
 
-## 4. Équilibrage du mode spicy à plusieurs
+## 4. Équilibrage du mode spicy à plusieurs · **écarté**
 
 Mesuré sur 150 parties par configuration, même bot qu'au §1 :
 
@@ -373,33 +420,38 @@ Deux conséquences de fond, à décider plutôt qu'à corriger :
    ne surveillait pas forcément — plus dur à anticiper, à fréquence presque
    égale.
 
-Si on veut retrouver la sensation du jeu à deux, le nombre de cartes spéciales
-devrait décroître avec le nombre de joueurs plutôt que rester fixe — par exemple
-autour de `⌈10 / joueurs⌉` Vol. Mais c'est un choix de jeu : il n'est pas
-évident que la version à quatre soit moins bonne, seulement qu'elle est
-différente de celle qui a été réglée.
+**Écarté, et assumé.** Le mode spicy est une règle maison : à quatre joueurs il
+est simplement plus nerveux, pas cassé, et à six ou huit c'est une autre partie —
+qu'on joue parce qu'on a envie de ça. Faire décroître le nombre de cartes
+spéciales avec le nombre de joueurs (autour de `⌈10 / joueurs⌉` Vol, par exemple)
+retrouverait la sensation du jeu à deux, mais rien ne dit que c'est celle qu'on
+cherche à huit.
+
+Ce qui a été corrigé en revanche, parce que c'était faux : le commentaire de
+`STEAL_COUNT`, qui annonçait des fréquences que la mesure dément.
 
 Le joker, lui, reste rare partout (il ne ferme un groupe que 0,08 à 0,25 fois
 par manche) : deux exemplaires ne sont pas de trop.
 
 ---
 
-## 5. Par où commencer
+## 5. Ce qui a été fait
 
-| # | Correctif | Coût | Effet |
-| --- | --- | --- | --- |
-| 2.1 | `MAX_COMMIT_RETRIES` 6 → 24 | une ligne | supprime un échec par manche à partir de 4 joueurs |
-| 2.2 | Taire le refus de `nextRound` déjà joué | trois lignes | supprime trois bandeaux rouges par manche |
-| 2.4 | Score adverse non tronqué | petit | rend lisible le chiffre qui décide de la partie |
-| 3.1 | Somme visible des adversaires dans le panneau | petit | rend la décision de fermer calculable |
-| 2.5 | `justify-center` → marge automatique + `fade-right` | deux mots de CSS | plus rien de rogné sous 375 px |
-| 2.6 | `'swapping'` dans `holderId` | un mot | la Valse retrouve son porteur |
-| 3.2 | Marquer le joueur suivant | petit | rend la rotation lisible |
-| 3.5 | Textes du salon et des règles | petit | arrête de dire « à deux » à quatre personnes |
-| 3.3 | File d'annonces dans `EventLayer` | moyen | les éliminations d'en face ne se perdent plus |
-| 2.3 | Départ, déconnexion, exclusion du salon | gros, à décider | une partie à quatre ne meurt plus sur un onglet fermé |
-| 3.6 | Bande qui défile jusqu'au joueur actif | moyen | tient la promesse du « ou à huit » |
-| 3.4 | Notifications web | gros | comble l'attente qui triple |
+| # | Correctif | Où |
+| --- | --- | --- |
+| 2.1 | `MAX_COMMIT_RETRIES` 6 → 24, et le test de contention qui le tient | `store.ts`, `contention.test.ts` |
+| 2.2 | `nextRound` / `playAgain` deviennent idempotents : un doublon n'écrit rien et ne refuse rien | `engine.ts` (`alreadyDone`), `store.ts` |
+| 2.4 | Score adverse non tronqué : les deux tuiles descendent en bas du panneau | `OpponentStrip.tsx`, `PlayerPanel.tsx` |
+| 3.1 | La somme visible des adversaires s'affiche à trois joueurs et plus | `OpponentStrip.tsx` |
+| 2.5 | `justify-center-safe` + fondu piloté par le débordement mesuré | `OpponentStrip.tsx`, `globals.css` |
+| 2.6 | `'swapping'` rejoint `holderId` : la Valse retrouve son porteur | `GameClient.tsx` |
+| 3.2 | `nextPlayerId` : mention « ensuite », liseré, consigne, chip sur ma grille | `view.ts`, `OpponentStrip.tsx`, `MyBoard.tsx` |
+| 3.3 | File d'annonces (trois au plus) et `lastMoves` : plus rien ne s'écrase | `EventLayer.tsx`, `moves.ts` |
+| 3.5 | Rang et compte au salon, « de 2 à 8 joueurs » dans les règles | `GameClient.tsx`, `regles/page.tsx` |
+| 3.6 | La bande défile jusqu'au joueur actif | `OpponentStrip.tsx` |
+| 3.4 | Notification « À toi de jouer ! », sur activation explicite | `nudge.ts`, `EventLayer.tsx`, `GameClient.tsx` |
+| 2.3 | **Écarté** : quatre potes à table relancent une partie plutôt que d'attendre un absent | — |
+| 4 | **Écarté** : le dosage spicy à plusieurs est une autre partie, pas une partie cassée | — |
 
 ---
 
@@ -416,12 +468,15 @@ sur `applyAction` avec le bot décrit au §1, 150 à 200 graines par configurati
 Les scripts de mesure n'ont pas été conservés : ils ne testent rien, ils
 comptent.
 
-**Contention des retournements initiaux** — un `Backend` de test qui dort
-`rtt` millisecondes à chaque appel (`installBackend`, comme
-`src/lib/server/store.test.ts`), puis `2n` appels `performAction` lancés en
-parallèle avec `Promise.all`, et on compte les rejets. Vaut la peine d'être
-ajouté à la suite **en même temps** que le correctif du §2.1, pas avant : tel
-quel, le test échoue.
+**Contention des retournements initiaux** — dans la suite :
+
+```bash
+npx vitest run src/lib/server/contention.test.ts
+```
+
+Un `Backend` qui dort `rtt` millisecondes à chaque appel, puis `2n` appels
+`performAction` lancés en parallèle. Il sert de garde-fou au §2.1 : remettre
+`MAX_COMMIT_RETRIES` à 6 le fait échouer à 4, 6 et 8 joueurs, et passer à 2.
 
 **Mise en page** — Chromium piloté, identité posée dans `localStorage`, partie
 montée par l'API, puis mesure de `scrollWidth` / `getBoundingClientRect` sur la

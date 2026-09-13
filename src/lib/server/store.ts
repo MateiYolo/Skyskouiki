@@ -27,7 +27,31 @@ import {
 /** Mille codes possibles, et les parties dorment moins de quinze jours :
  *  la boucle de `createRoom` absorbe les rares collisions. */
 const CODE_ALPHABET = '0123456789';
-const MAX_COMMIT_RETRIES = 6;
+
+/**
+ * Combien de fois un coup peut être rejoué sur un état plus frais.
+ *
+ * Ce compteur ne borne pas le temps — c'est `ACTION_BUDGET_MS` qui s'en charge,
+ * et c'est la seule borne qui compte pour ne pas être coupé en plein vol. Ce
+ * compteur-là borne la **contention** : combien de mains peuvent écrire en même
+ * temps sur la même partie avant qu'on renonce.
+ *
+ * Il valait six, et six suffit à deux joueurs — un tour de Skyjo est séquentiel,
+ * à tout instant un seul joueur a le droit d'écrire. Sauf à un endroit, et il
+ * revient à chaque manche : le **retournement initial**, le seul moment du jeu
+ * où tout le monde joue en même temps. Quatre joueurs qui retournent deux
+ * cartes, ce sont huit écritures concurrentes ; celui qui perd toutes les
+ * courses a besoin de huit tentatives, pas de six, et repartait avec un bandeau
+ * rouge sur un coup parfaitement légal. Mesuré contre un dos à la latence d'une
+ * vraie base : deux requêtes perdues sur huit à quatre joueurs, dix sur seize à
+ * huit (cf. `store.contention.test.ts`).
+ *
+ * Vingt-quatre couvre le pire cas de la table complète (huit joueurs, seize
+ * écritures) avec de la marge, et ne coûte rien quand il n'y a pas de
+ * contention : un refus de verrou, c'est un aller-retour, pas une seconde. Le
+ * budget de temps reste la vraie sortie de secours.
+ */
+const MAX_COMMIT_RETRIES = 24;
 
 /**
  * Combien de temps on laisse à un appel Supabase avant de le considérer perdu.
@@ -473,6 +497,21 @@ export async function performAction(
         fresh = true;
         if (state) remember(state);
         continue;
+      }
+
+      // Le moteur a reconnu un doublon : l'action était déjà jouée, l'état
+      // revient inchangé (cf. `alreadyDone`). Il n'y a rien à écrire et rien à
+      // diffuser — mais encore faut-il que ce soit vrai, et un état sorti du
+      // cache peut avoir un tour de retard. Même précaution que pour un refus :
+      // on ne tranche que sur du frais.
+      if (result.state.version === state.version) {
+        if (!fresh) {
+          state = await db().load(code);
+          fresh = true;
+          if (state) remember(state);
+          continue;
+        }
+        return toView(state, playerId);
       }
 
       const stamped: Stamped = { ...result.state, writeId: crypto.randomUUID() };

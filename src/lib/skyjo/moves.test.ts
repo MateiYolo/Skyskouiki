@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, createGame } from './engine';
-import { heldSummary, lastMove } from './moves';
+import { heldSummary, lastMoves } from './moves';
 import { toView } from './view';
 import type { Action, GameState } from './types';
 
@@ -24,19 +24,19 @@ function started(seed = 42): GameState {
 const current = (s: GameState) => s.players[s.currentPlayerIndex].id;
 const other = (s: GameState) => s.players.find((p) => p.id !== current(s))!.id;
 
-describe('lastMove', () => {
+describe('lastMoves', () => {
   it('dit qui a pioché', () => {
     let s = started();
     const id = current(s);
     s = play(s, { type: 'drawFromPile', playerId: id });
-    expect(lastMove(toView(s, other(s)))).toEqual({ playerId: id, text: 'pioche' });
+    expect(lastMoves(toView(s, other(s)))).toEqual({ [id]: 'pioche' });
   });
 
   it('dit qui a pris la défausse', () => {
     let s = started();
     const id = current(s);
     s = play(s, { type: 'takeDiscard', playerId: id });
-    expect(lastMove(toView(s, other(s)))).toEqual({ playerId: id, text: 'prend la défausse' });
+    expect(lastMoves(toView(s, other(s)))).toEqual({ [id]: 'prend la défausse' });
   });
 
   it('dit ce qui a été posé et ce qui part à la défausse', () => {
@@ -46,10 +46,7 @@ describe('lastMove', () => {
     const held = s.heldCard!;
     const replaced = s.players.find((p) => p.id === id)!.grid[0]!.value;
     s = play(s, { type: 'placeCard', playerId: id, index: 0 });
-    expect(lastMove(toView(s, id))).toEqual({
-      playerId: id,
-      text: `pose ${held}, jette ${replaced}`,
-    });
+    expect(lastMoves(toView(s, id))).toEqual({ [id]: `pose ${held}, jette ${replaced}` });
   });
 
   it('dit ce qui a été jeté puis ce qui a été retourné', () => {
@@ -58,16 +55,34 @@ describe('lastMove', () => {
     s = play(s, { type: 'drawFromPile', playerId: id });
     const held = s.heldCard!;
     s = play(s, { type: 'discardHeld', playerId: id });
-    expect(lastMove(toView(s, id))?.text).toBe(`jette ${held}`);
+    expect(lastMoves(toView(s, id))[id]).toBe(`jette ${held}`);
 
     s = play(s, { type: 'flipCard', playerId: id, index: 2 });
     const revealed = s.players.find((p) => p.id === id)!.grid[2]!.value;
-    expect(lastMove(toView(s, id))).toEqual({ playerId: id, text: `retourne ${revealed}` });
+    expect(lastMoves(toView(s, id))).toEqual({ [id]: `retourne ${revealed}` });
   });
 
   it('ne raconte rien avant le premier coup', () => {
     const s = started();
-    expect(lastMove(toView(s, 'p0'))).toBeNull();
+    expect(lastMoves(toView(s, 'p0'))).toEqual({});
+  });
+
+  // Deux coups dans le même lot : c'est ce que le sondage de secours ramène
+  // quand il a pris du retard, et à plusieurs joueurs les deux sont d'auteurs
+  // différents. N'en montrer qu'un laissait l'autre jouer dans le dos de tout
+  // le monde.
+  it('rend un coup par joueur quand plusieurs ont joué dans le même lot', () => {
+    let s = started();
+    const first = current(s);
+    const since = s.version;
+    s = play(s, { type: 'drawFromPile', playerId: first });
+    s = play(s, { type: 'placeCard', playerId: first, index: 0 });
+    const second = current(s);
+    s = play(s, { type: 'drawFromPile', playerId: second });
+
+    const moves = lastMoves(toView(s, second, since));
+    expect(Object.keys(moves).sort()).toEqual([first, second].sort());
+    expect(moves[second]).toBe('pioche');
   });
 });
 

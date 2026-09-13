@@ -176,6 +176,12 @@ aller-retour et « le plus petit total » n'a qu'un concurrent. Le reste de ce q
 le passage à quatre change — écritures simultanées, lisibilité, dosage du mode
 spicy — est mesuré dans [`docs/AUDIT-MULTIJOUEUR.md`](docs/AUDIT-MULTIJOUEUR.md).
 
+`src/lib/server/contention.test.ts` tient le seul endroit du jeu où plusieurs
+joueurs écrivent en même temps : le retournement initial, qui revient à chaque
+manche. Il se joue contre un dos à latence, parce que sans elle les requêtes se
+sérialisent d'elles-mêmes et la contention n'existe pas — ce qui est exactement
+pourquoi le défaut ne se voyait pas en développement.
+
 `npm run smoke` joue deux parties complètes par HTTP, une par mode. Les règles
 du vol et du joker sont couvertes au coup par coup côté moteur, avec une graine
 fixe ; ce que le smoke vérifie en plus, c'est que les trois actions ajoutées
