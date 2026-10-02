@@ -7,6 +7,7 @@ import {
   cardToCell,
   cellToCard,
   clearGroups,
+  placeableCells,
   setCellCard,
   countFaceDown,
   countFaceUp,
@@ -250,8 +251,10 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       const player = s.players[s.currentPlayerIndex];
       const cell = cellAt(player.grid, action.index);
       if (!cell) return fail('Case invalide.');
-      const replaced = cellToCard(cell);
       const placed = s.heldCard!;
+      if (!placeableCells(player.grid, placed).includes(action.index))
+        return fail('Tu ne peux pas remplacer une carte par la même.');
+      const replaced = cellToCard(cell);
       s.discardPile.push(replaced);
       // La case prend l'identité de la carte posée, joker compris : sans ça, un
       // joker posé deviendrait un 0 ordinaire et perdrait son pouvoir en route.

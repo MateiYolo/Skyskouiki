@@ -165,6 +165,43 @@ export function setCellCard(cell: NonNullable<Cell>, card: ValueCard, faceUp = t
   else delete cell.joker;
 }
 
+/**
+ * Règle maison : on ne remplace pas une carte visible par la même carte.
+ *
+ * Poser un 4 sur un 4 déjà retourné ne change rien à la grille : c'est un
+ * coup nul déguisé, qui sert seulement à passer son tour en jetant une carte
+ * à la défausse. Une carte cachée, elle, reste toujours permise — personne ne
+ * sait ce qu'il y a dessous, pas même celui qui pose.
+ *
+ * Le joker n'est « la même carte » que d'un autre joker : il vaut 0 au
+ * comptage, mais un joker posé sur un 0 change bel et bien la grille.
+ *
+ * La case est structurelle pour servir telle quelle à la vue (`ViewCell`).
+ */
+export function isSameCard(
+  cell: { faceUp: boolean; value?: number; joker?: true } | null,
+  card: ValueCard,
+): boolean {
+  if (!cell || !cell.faceUp) return false;
+  return isJokerCard(card) ? cell.joker === true : !cell.joker && cell.value === card;
+}
+
+/**
+ * Les cases où la carte en main peut être posée.
+ *
+ * Si la règle ne laisse plus aucune case — une grille réduite à des copies
+ * visibles de la carte en main, sans dos à retourner — elle se lève : un tour
+ * ne doit jamais pouvoir se bloquer.
+ */
+export function placeableCells(
+  grid: readonly ({ faceUp: boolean; value?: number; joker?: true } | null)[],
+  card: ValueCard,
+): number[] {
+  const present = grid.flatMap((cell, i) => (cell ? [i] : []));
+  const allowed = present.filter((i) => !isSameCard(grid[i], card));
+  return allowed.length > 0 ? allowed : present;
+}
+
 /** Les cartes sans valeur que le mode spicy glisse dans la pioche. */
 export function spicySpecials(): SpecialCard[] {
   return [

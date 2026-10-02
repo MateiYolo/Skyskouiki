@@ -95,7 +95,7 @@ export default function Home() {
 
         <h1 className="text-center text-4xl font-black tracking-tight">Skouikjo</h1>
         <p className="mb-7 mt-2 text-center text-sm text-ink-dim">
-          Le Skyjo, chacun sur son téléphone. Règles officielles, deux règles maison, zéro pub.
+          Le Skyjo, chacun sur son téléphone. Règles officielles, trois règles maison, zéro pub.
         </p>
 
         {/* Profil */}

@@ -12,6 +12,7 @@ import {
   cardToCell,
   columnIndices,
   gridSum,
+  placeableCells,
   rowIndices,
   shuffle,
 } from './rules';
@@ -201,6 +202,42 @@ describe('tour de jeu', () => {
     expect(s.discardPile.at(-1)).toBe(replaced);
     expect(s.discardPile.length).toBe(discardBefore + 1);
     expect(s.players[s.currentPlayerIndex].id).not.toBe(id);
+  });
+
+  describe('pas de carte sur sa jumelle', () => {
+    /** Met la carte `held` en main du joueur actif, tirée de la défausse. */
+    function holding(held: ValueCard, grid: Array<ValueCard | null>, faceUp = true) {
+      const s = started(2);
+      const id = s.players[s.currentPlayerIndex].id;
+      setGrid(s, id, grid, faceUp);
+      s.discardPile.push(held);
+      return { s: play(s, { type: 'takeDiscard', playerId: id }), id };
+    }
+
+    it('refuse de poser une carte sur sa copie visible', () => {
+      const { s, id } = holding(4, [4, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12]);
+      expect(expectFail(s, { type: 'placeCard', playerId: id, index: 0 })).toMatch(/la même/);
+      expect(placeableCells(s.players[s.currentPlayerIndex].grid, 4)).not.toContain(0);
+      play(s, { type: 'placeCard', playerId: id, index: 1 });
+    });
+
+    it('laisse poser sur une carte cachée, même de même valeur', () => {
+      const { s, id } = holding(4, [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4], false);
+      const after = play(s, { type: 'placeCard', playerId: id, index: 3 });
+      expect(after.discardPile.at(-1)).toBe(4);
+    });
+
+    it('distingue le joker du 0', () => {
+      const { s, id } = holding(JOKER_CARD, [0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12]);
+      play(s, { type: 'placeCard', playerId: id, index: 0 });
+    });
+
+    it('se lève quand aucune autre case ne reste', () => {
+      const grid: Array<ValueCard | null> = Array(12).fill(null);
+      grid[2] = 4;
+      const { s, id } = holding(4, grid);
+      play(s, { type: 'placeCard', playerId: id, index: 2 });
+    });
   });
 
   it('défausse la carte piochée puis oblige à retourner une carte cachée', () => {
@@ -466,7 +503,8 @@ describe('fin de manche', () => {
     expect(s.phase).toBe('playing');
     expect(s.players[s.currentPlayerIndex].id).toBe('p2');
 
-    s = neutralTurn(s, 3);
+    // p1 vient de jeter son 4 : p2 ne peut pas le reposer sur le sien.
+    s = neutralTurn(s, 4);
     expect(s.phase).toBe('roundOver');
     expect(s.lastRoundScores).not.toBeNull();
   });
@@ -505,7 +543,8 @@ describe('comptage des points', () => {
   /**
    * Force une fin de manche fermée par p0 avec des grilles imposées.
    * Le dernier tour de p1 est rendu neutre : on truque la pioche pour que la
-   * carte qui lui revient soit exactement celle qu'il remplace.
+   * carte qui lui revient soit exactement celle qu'il remplace. La case reste
+   * cachée : poser une carte sur sa jumelle visible est interdit.
    */
   function scoreRound(p0: number[], p1: number[], targetScore = 100) {
     let s = started(2, 1);
@@ -515,6 +554,7 @@ describe('comptage des points', () => {
     setGrid(s, 'p0', p0);
     s.players[0].grid[11] = { value: p0[11], faceUp: false };
     setGrid(s, 'p1', p1);
+    s.players[1].grid[0] = { value: p1[0], faceUp: false };
     s.drawPile.push(p1[0]);
 
     s = play(s, { type: 'drawFromPile', playerId: 'p0' });
