@@ -6,7 +6,7 @@ import { JOKER_CARD, STEAL_CARD, SWAP_CARD } from '@/lib/skyjo';
 export const metadata: Metadata = {
   title: 'Règles · Skouikjo',
   description:
-    'Les règles officielles du Skyjo, en français, plus deux règles maison et le mode spicy.',
+    'Les règles officielles du Skyjo, en français, plus trois règles maison et le mode spicy.',
 };
 
 function Section({
@@ -63,7 +63,7 @@ export default function RulesPage() {
 
       <h1 className="text-3xl font-black tracking-tight">Les règles</h1>
       <p className="mt-2 text-sm text-ink-dim">
-        Celles du jeu original, plus deux règles maison — signalées là où elles s’appliquent. But
+        Celles du jeu original, plus trois règles maison — signalées là où elles s’appliquent. But
         du jeu&nbsp;: avoir le plus petit total. Les quatre dernières sections ne valent que pour le{' '}
         <Key>mode spicy</Key>, qui se choisit dans le salon avant de lancer la partie.
       </p>
@@ -131,7 +131,20 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="05" title="Les colonnes">
+      <Section n="05" title="Pas de carte sur sa jumelle" house>
+        <p>
+          Tu ne peux pas <Key>remplacer une carte visible par la même carte</Key>&nbsp;: piocher un
+          4 et le poser sur un 4 déjà retourné, c’est non. Ça ne change rien à ta grille, ça revient
+          juste à passer ton tour.
+        </p>
+        <p>
+          Une carte cachée reste toujours permise&nbsp;— tu ne sais pas ce qu’il y a dessous. Et si
+          vraiment ta grille ne te laisse aucune autre case, la règle saute&nbsp;: un tour ne se
+          bloque jamais.
+        </p>
+      </Section>
+
+      <Section n="06" title="Les colonnes">
         <p>
           Trois cartes <Key>identiques face visible dans une même colonne</Key>&nbsp;? Les trois
           disparaissent de ta grille et filent à la défausse. Elles ne comptent plus un seul point.
@@ -142,7 +155,7 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="06" title="Les lignes" house>
+      <Section n="07" title="Les lignes" house>
         <p>
           Ici, une <Key>ligne entière de cartes identiques</Key> saute aussi. Ce n’est{' '}
           <Key>pas</Key> dans les règles du jeu de société&nbsp;: là-bas, seules les colonnes
@@ -165,7 +178,7 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="07" title="Fin de manche">
+      <Section n="08" title="Fin de manche">
         <p>
           Dès qu’un joueur a <Key>retourné toutes ses cartes</Key>, la manche se termine&nbsp;: chacun
           des autres joue <Key>encore un tour</Key>, puis tout le monde révèle sa grille.
@@ -176,7 +189,7 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="08" title="Le comptage (et le piège)">
+      <Section n="09" title="Le comptage (et le piège)">
         <p>Chacun additionne les cartes qui lui restent. Les négatives se soustraient.</p>
         <p className="rounded-xl border border-danger/30 bg-danger/10 p-3 text-ink">
           <Key>La pénalité.</Key> Le joueur qui a fermé la manche <Key>double ses points</Key> s’il
@@ -189,21 +202,21 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="09" title="Fin de partie">
+      <Section n="10" title="Fin de partie">
         <p>
           On enchaîne les manches. Dès que quelqu’un atteint <Key>100 points ou plus</Key>, la partie
           s’arrête à la fin de cette manche. Le <Key>plus petit total</Key> l’emporte.
         </p>
       </Section>
 
-      <Section n="10" title="Cas particulier">
+      <Section n="11" title="Cas particulier">
         <p>
           Si la pioche s’épuise, on mélange la défausse — sauf sa carte du dessus — pour en refaire
           une.
         </p>
       </Section>
 
-      <Section n="11" title="Le mode spicy" spicy>
+      <Section n="12" title="Le mode spicy" spicy>
         <p>
           Quatre nouvelles cartes dans le paquet, et rien d’autre&nbsp;: le tour de jeu, les colonnes,
           les lignes, le comptage et la pénalité de fermeture ne changent pas d’une virgule. L’hôte
@@ -219,7 +232,7 @@ export default function RulesPage() {
         </div>
       </Section>
 
-      <Section n="12" title="Le -5 et les jokers" spicy>
+      <Section n="13" title="Le -5 et les jokers" spicy>
         <p>
           <Key>Deux -5</Key> rejoignent le paquet. Rien de plus qu’une carte&nbsp;: elle se pose, se
           vole et part à la défausse comme les autres. Il n’y en a que deux, donc une colonne de -5
@@ -250,7 +263,7 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="13" title="La carte Vol" spicy>
+      <Section n="14" title="La carte Vol" spicy>
         <p>
           <Key>Cinq cartes Vol</Key> sont glissées dans la pioche — et seulement là. Elles ne
           peuvent donc pas dormir dans une grille&nbsp;: un Vol ne se déclenche que si{' '}
@@ -284,7 +297,7 @@ export default function RulesPage() {
         </p>
       </Section>
 
-      <Section n="14" title="La carte Valse" spicy>
+      <Section n="15" title="La carte Valse" spicy>
         <p>
           <Key>Quatre cartes Valse</Key> complètent la pioche, et comme le Vol elles n’existent{' '}
           <Key>que là</Key>&nbsp;: une Valse ne se déclenche que si tu la pioches.

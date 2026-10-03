@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, createGame } from './engine';
+import { placeableCells } from './rules';
 import { legalActionsFor } from './view';
 import { GRID_SIZE } from './types';
 import type { Action, Cell, GameState, Variant } from './types';
@@ -86,7 +87,7 @@ function anyLegalMove(s: GameState, rnd: () => number): Action {
     case 'discardHeld':
       return { type: 'discardHeld', playerId };
     case 'placeCard':
-      return { type: 'placeCard', playerId, index: pick(filled(me.grid), rnd) };
+      return { type: 'placeCard', playerId, index: pick(placeableCells(me.grid, s.heldCard!), rnd) };
     case 'flipCard': {
       const hidden = me.grid.map((c, i) => (c && !c.faceUp ? i : -1)).filter((i) => i >= 0);
       return { type: 'flipCard', playerId, index: pick(hidden, rnd) };

@@ -18,7 +18,7 @@ import { MOVE } from '@/lib/client/motion';
 import { armAudio, cue, initAudio, isMuted, setMuted } from '@/lib/client/feedback';
 import { disableNudge, enableNudge, nudgeState, type NudgeState } from '@/lib/client/nudge';
 import { useGame } from '@/lib/client/useGame';
-import { heldSummary, lastMoves, nextPlayerId } from '@/lib/skyjo';
+import { heldSummary, lastMoves, nextPlayerId, placeableCells } from '@/lib/skyjo';
 import type { GameView, LegalAction, Variant } from '@/lib/skyjo';
 
 /** Ce que le joueur doit faire, là, maintenant. */
@@ -201,6 +201,12 @@ export function GameClient({ code }: { code: string }) {
     () => new Set(view?.legalActions ?? []),
     [view?.legalActions],
   );
+  // Règle maison : la carte en main ne remplace pas sa propre copie visible.
+  const heldCard = view?.heldCard ?? null;
+  const placeable = useMemo(
+    () => (me && heldCard !== null ? new Set(placeableCells(me.grid, heldCard)) : null),
+    [me, heldCard],
+  );
   const legalRef = useRef(legal);
   useEffect(() => {
     legalRef.current = legal;
@@ -263,7 +269,7 @@ export function GameClient({ code }: { code: string }) {
         // troisième tap partirait pour se faire refuser par le serveur.
         return !cell.faceUp && me.faceUpCount + revealing.length < 2;
       }
-      if (legal.has('placeCard')) return true;
+      if (legal.has('placeCard')) return placeable?.has(index) ?? true;
       // Un Vol échange n'importe laquelle de mes cartes, dos compris : donner
       // une carte qu'on n'a jamais vue est un coup à part entière. La Valse en
       // prend deux, avec la même liberté.
@@ -271,7 +277,7 @@ export function GameClient({ code }: { code: string }) {
       if (legal.has('flipCard')) return !cell.faceUp;
       return false;
     },
-    [legal, me, revealing],
+    [legal, me, placeable, revealing],
   );
 
   // Un seul bouton « Renoncer » pour les deux cartes : c'est la règle du moment
@@ -360,7 +366,12 @@ export function GameClient({ code }: { code: string }) {
   // Quand *toutes* les cases sont jouables — une carte à poser, une carte à
   // donner au Vol, deux à intervertir — douze liserés jaunes ne désignent rien
   // et couvrent la seule chose à lire, les cartes.
-  const markTargets = !legal.has('placeCard') && !legal.has('steal') && !legal.has('swap');
+  // Seule exception : une carte en main qui a sa copie visible dans la grille.
+  // Là, les liserés disent justement où elle n'a pas le droit d'aller.
+  const placeBlocked =
+    legal.has('placeCard') && !!placeable && placeable.size < (me?.grid.filter(Boolean).length ?? 0);
+  const markTargets =
+    placeBlocked || (!legal.has('placeCard') && !legal.has('steal') && !legal.has('swap'));
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">

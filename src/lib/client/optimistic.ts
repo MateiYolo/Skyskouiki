@@ -1,4 +1,4 @@
-import { JOKER_CARD, cellToCard, type GameView, type ViewCell, type ViewPlayer } from '@/lib/skyjo';
+import { JOKER_CARD, cellToCard, placeableCells, type GameView, type ViewCell, type ViewPlayer } from '@/lib/skyjo';
 import type { ClientAction } from './actions';
 
 /**
@@ -111,6 +111,8 @@ export function optimisticView(
       const me = view.players.find((p) => p.id === playerId);
       const cell = me?.grid[action.index];
       if (!me || cell === undefined || cell === null || view.heldCard === null) return null;
+      // Le serveur refusera : mieux vaut ne rien bouger que d'annoncer un coup qui revient.
+      if (!placeableCells(me.grid, view.heldCard).includes(action.index)) return null;
 
       const grid = me.grid.map((c, i) => (i === action.index ? placedCell(view.heldCard!) : c));
 
