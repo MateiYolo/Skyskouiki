@@ -337,7 +337,11 @@ export function GameClient({ code }: { code: string }) {
   }, [holderId, view]);
 
   if (!ready || loading) {
-    return <Centered>Chargement…</Centered>;
+    return (
+      <Centered>
+        <span className="font-arcade arcade-glow arcade-blink text-[0.65rem] text-accent">CHARGEMENT</span>
+      </Centered>
+    );
   }
   if (error || !view) {
     return (
@@ -385,7 +389,7 @@ export function GameClient({ code }: { code: string }) {
         </Link>
         {/* Le code n'a plus rien à faire ici une fois tout le monde entré : il
             vit dans le salon, puis dans le menu ⚙ pour le retardataire. */}
-        <div className="text-[0.65rem] uppercase tracking-[0.18em] text-ink-faint">
+        <div className="font-arcade text-[0.5rem] uppercase leading-none text-ink-faint">
           {view.phase === 'lobby' ? 'salon' : `manche ${view.round}`} · objectif {view.targetScore}
           {/* Le mode change le paquet : il doit rester lisible toute la partie,
               pas seulement au moment où on le choisit. */}
@@ -601,7 +605,10 @@ function ProfileGate({
   return (
     <div className="grid h-dvh place-items-center px-6">
       <div className="w-full max-w-sm rise">
-        <h1 className="text-center text-2xl font-black">Tu es qui ?</h1>
+        {/* L'écran de sélection du joueur, comme sur une borne. */}
+        <h1 className="font-arcade neon-sign neon-on text-center text-lg leading-relaxed">
+          QUI JOUE ?
+        </h1>
         <p className="mb-5 mt-1 text-center text-sm text-ink-dim">
           Juste un prénom et une bestiole, pas de compte.
         </p>
@@ -679,7 +686,9 @@ function Lobby({
         <div className="mx-auto flex min-h-full w-full max-w-sm flex-col items-center justify-center gap-5 px-6 py-5">
           <div className="text-center">
             <p className="text-xs uppercase tracking-[0.2em] text-ink-faint">code de la partie</p>
-            <p className="tnum mt-1 text-5xl font-black tracking-[0.24em] text-accent">
+            {/* L'afficheur à points d'un flipper : trois chiffres qui se lisent
+                de l'autre bout de la table. */}
+            <p className="scanlines arcade-glow relative mt-2 rounded-xl border border-accent/30 bg-black/50 px-5 py-3 font-arcade text-4xl tracking-[0.2em] text-accent">
               {view.code}
             </p>
           </div>
@@ -705,7 +714,8 @@ function Lobby({
                   {/* Le rang, parce qu'il n'est pas décoratif : l'ordre d'arrivée
                       **est** l'ordre de jeu, et à quatre ça se décide au salon
                       plutôt qu'à la première manche. */}
-                  <span className="tnum text-[0.6rem] font-bold text-ink-faint">{seat + 1}</span>
+                  {/* « 1UP », « 2UP » : le rang dit comme une borne. */}
+                  <span className="font-arcade arcade-glow text-[0.45rem] text-swap">{seat + 1}UP</span>
                   <span className="text-lg" aria-hidden>
                     {player.emoji}
                   </span>
@@ -736,8 +746,10 @@ function Lobby({
           {view.you.isHost ? (
             view.players.length < 2 ? (
               // Un bouton jaune grisé vire au brun : mieux vaut un état d'attente assumé.
-              <p className="w-full rounded-2xl border border-dashed border-white/15 px-4 py-3.5 text-center text-sm text-ink-dim">
-                En attente d’un joueur…
+              <p className="w-full rounded-2xl border border-dashed border-white/15 px-4 py-3.5 text-center">
+                <span className="font-arcade arcade-glow arcade-blink text-[0.6rem] text-swap">
+                  2UP : EN ATTENTE
+                </span>
               </p>
             ) : (
               <button

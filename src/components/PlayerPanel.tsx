@@ -106,8 +106,11 @@ export function ScoreTiles({
   full?: boolean;
 }) {
   const hot = total >= target * 0.75;
+  // Des chiffres de compteur de flipper. La police pixel est plus large que
+  // l'autre à taille égale : un cran de moins, pour qu'un « -12 » tienne
+  // toujours dans la tuile d'une colonne étroite.
   const num =
-    size === 'xs' ? 'text-[0.78rem]' : size === 'sm' ? 'text-[0.95rem]' : 'text-[1.15rem]';
+    size === 'xs' ? 'text-[0.6rem]' : size === 'sm' ? 'text-[0.72rem]' : 'text-[0.88rem]';
   const pad = size === 'xs' ? 'px-1 py-px' : size === 'sm' ? 'px-2 py-0.5' : 'px-2.5 py-1';
   const tile = full ? 'min-w-0 flex-1' : '';
 
@@ -197,18 +200,18 @@ function Tile({
       <span className="text-[0.5rem] font-semibold uppercase leading-none tracking-[0.12em] opacity-70">
         {label}
       </span>
-      <span className={`tnum font-black leading-tight ${num}`}>{value}</span>
+      <span className={`font-arcade arcade-glow mt-1 leading-tight ${num}`}>{value}</span>
 
       <AnimatePresence>
         {shown && (
           <motion.span
             key={shown.id}
-            className="pointer-events-none absolute -top-0.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[0.68rem] font-black"
+            className="font-arcade pointer-events-none absolute -top-0.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[0.55rem]"
             style={{
               // Au Skyjo, monter c'est perdre : la couleur dit le sens avant
               // que le chiffre ne soit lu.
               color: shown.delta > 0 ? 'var(--color-danger)' : 'var(--color-good)',
-              textShadow: '0 1px 6px rgb(11 7 22 / 0.9)',
+              textShadow: '0 0 6px currentColor, 0 1px 6px rgb(11 7 22 / 0.9)',
             }}
             initial={{ opacity: 0, y: 2 }}
             animate={{ opacity: [0, 1, 1, 0], y: [2, -9, -13, -19] }}
@@ -220,7 +223,8 @@ function Tile({
               ease: 'easeOut',
             }}
           >
-            {shown.delta > 0 ? '+' : '−'}
+            {/* Un tiret simple : la police pixel n'a pas le signe moins. */}
+            {shown.delta > 0 ? '+' : '-'}
             {Math.abs(shown.delta)}
           </motion.span>
         )}

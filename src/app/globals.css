@@ -36,6 +36,8 @@
 
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-numeric: var(--font-numeric-stack);
+  /* La borne d'arcade : pour le cadre seulement (cf. layout.tsx). */
+  --font-arcade: var(--font-press-start), ui-monospace, monospace;
 
   /* Une seule courbe : elle freine à l'arrivée et ne dépasse jamais. */
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
@@ -271,14 +273,23 @@ button,
    pas un événement, et une bordure qui bat en continu finit par se regarder
    elle-même au lieu de la grille. */
 .turn-glow {
-  box-shadow: inset 0 0 0 2px rgb(255 204 77 / 0.75), inset 0 0 40px rgb(255 204 77 / 0.14);
+  box-shadow:
+    inset 0 0 0 2px rgb(255 204 77 / 0.85),
+    inset 0 0 6px 2px rgb(255 204 77 / 0.45),
+    inset 0 0 40px rgb(255 204 77 / 0.14);
+  /* Un tube néon ne brille jamais tout à fait pareil : il ronronne. */
+  animation: neon-hum 2.6s ease-in-out infinite;
 }
 
 /* Le même liseré, mais c'est le dernier tour de la manche : il vire au rouge.
    Le jaune veut dire « à toi », le rouge « à toi, et c'est la dernière fois » —
    deux consignes différentes qui ne peuvent pas porter la même couleur. */
 .turn-glow.is-final {
-  box-shadow: inset 0 0 0 2px rgb(255 90 95 / 0.8), inset 0 0 46px rgb(255 90 95 / 0.18);
+  box-shadow:
+    inset 0 0 0 2px rgb(255 90 95 / 0.9),
+    inset 0 0 6px 2px rgb(255 90 95 / 0.5),
+    inset 0 0 46px rgb(255 90 95 / 0.18);
+  animation-duration: 1.1s;
 }
 
 /* La bande d'adversaires défile : un fondu dit de quel côté il reste quelque
@@ -368,4 +379,69 @@ button,
     transparent 1px,
     transparent 3px
   );
+}
+
+/* --------------------------------------------------------------------------
+   Néon : l'enseigne au-dessus de la table
+   --------------------------------------------------------------------------
+   La règle : la table reste une table de cartes, douce et lisible. Ce qui
+   clignote, c'est le cadre autour — titres, annonces, compteurs, codes. Une
+   carte en police pixel ne se lirait plus d'un coup d'œil ; un titre en néon,
+   lui, se lit mieux. */
+
+@keyframes neon-hum {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+/* L'allumage d'un tube : deux ratés, puis il tient. Une fois, à l'arrivée. */
+@keyframes neon-on {
+  0% {
+    opacity: 0.08;
+  }
+  8% {
+    opacity: 1;
+  }
+  11% {
+    opacity: 0.25;
+  }
+  19% {
+    opacity: 1;
+  }
+  22% {
+    opacity: 0.45;
+  }
+  34%,
+  100% {
+    opacity: 1;
+  }
+}
+
+.neon-on {
+  animation: neon-on 1.1s steps(1, end) both;
+}
+
+/* L'enseigne : un tube blanc au cœur, un halo coloré autour. La couleur se
+   règle par `--neon` (l'ambre de la maison par défaut). */
+.neon-sign {
+  --neon: var(--color-accent);
+  color: color-mix(in srgb, var(--neon) 25%, white);
+  text-shadow:
+    0 0 2px rgb(255 255 255 / 0.8),
+    0 0 8px var(--neon),
+    0 0 22px color-mix(in srgb, var(--neon) 70%, transparent),
+    0 0 46px color-mix(in srgb, var(--neon) 40%, transparent);
+}
+
+/* Un cadre en tube : la bordure brille, dedans comme dehors. */
+.neon-frame {
+  box-shadow:
+    0 0 0 1px currentColor,
+    0 0 12px color-mix(in srgb, currentColor 45%, transparent),
+    inset 0 0 12px color-mix(in srgb, currentColor 22%, transparent);
 }

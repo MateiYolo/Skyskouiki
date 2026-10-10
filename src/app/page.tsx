@@ -100,9 +100,14 @@ export default function Home() {
       <div className="rise">
         <Fan />
 
-        <h1 className="text-center text-4xl font-black tracking-tight">Skouikjo</h1>
-        <p className="mb-7 mt-2 text-center text-sm text-ink-dim">
+        {/* L'enseigne du bar : elle s'allume en ratant deux fois, puis ronronne. */}
+        <h1 className="neon-sign neon-on text-center text-5xl font-black tracking-tight">Skouikjo</h1>
+        <p className="mt-3 text-center text-sm text-ink-dim">
           Le Skyjo, chacun sur son téléphone. Règles officielles, trois règles maison, zéro pub.
+        </p>
+        {/* « Zéro pub », dit comme une borne : pas de pièce à mettre. */}
+        <p className="font-arcade arcade-glow arcade-blink mb-7 mt-3 text-center text-[0.55rem] text-swap">
+          FREE PLAY
         </p>
 
         {/* Profil */}
@@ -160,7 +165,7 @@ export default function Home() {
               autoComplete="one-time-code"
               autoCorrect="off"
               maxLength={CODE_LENGTH}
-              className="tnum w-full rounded-2xl border border-white/12 bg-white/5 px-4 py-4 text-center text-3xl font-black tracking-[0.22em] outline-none placeholder:text-ink-faint focus:border-accent/60"
+              className="font-arcade arcade-glow w-full rounded-2xl border border-white/12 bg-black/40 px-4 py-4 text-center text-2xl tracking-[0.3em] text-accent outline-none placeholder:text-ink-faint placeholder:[text-shadow:none] focus:border-accent/60"
             />
             <button
               type="button"

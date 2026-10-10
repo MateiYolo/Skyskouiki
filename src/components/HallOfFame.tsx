@@ -1,7 +1,6 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
-import { Press_Start_2P } from 'next/font/google';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cue } from '@/lib/client/feedback';
 import {
@@ -27,8 +26,6 @@ import type { GameView } from '@/lib/skyjo';
  * lignes de balayage, et rien qui glisse : tout apparaît d'un coup, ligne
  * après ligne, comme un écran qu'on rafraîchit.
  */
-
-const arcade = Press_Start_2P({ weight: '400', subsets: ['latin'], display: 'swap' });
 
 /** Une couleur par rang, comme sur les bornes qui faisaient défiler l'arc-en-ciel. */
 const BEST_INKS = ['#ffcc4d', '#ff8a3d', '#ff5a5f', '#e94ec0', '#b77cff', '#38bdf8', '#2fe0c2', '#4ade80', '#d4f04c', '#f4f0ff'];
@@ -57,7 +54,7 @@ export function Scoreboard({
   const rows = Array.from({ length: BOARD_SIZE }, (_, i) => entries[i] ?? null);
 
   return (
-    <div className={`${arcade.className} select-none`}>
+    <div className="font-arcade select-none">
       <h3
         className={`arcade-glow mb-3 text-center ${compact ? 'text-[0.6rem]' : 'text-xs sm:text-sm'}`}
         style={{ color: kind === 'best' ? '#ffcc4d' : '#ff5a5f' }}
@@ -190,7 +187,7 @@ export function InitialsEntry({
   });
 
   return (
-    <div className={arcade.className}>
+    <div className="font-arcade">
       <div className="mx-auto flex w-fit gap-3">
         {letters.map((letter, i) => (
           <div key={i} className="flex w-14 flex-col items-center">
@@ -307,7 +304,7 @@ export function FameCorner({ view }: { view: GameView }) {
     content = (
       <>
         <p
-          className={`${arcade.className} arcade-glow arcade-blink mb-1 text-center text-[0.7rem]`}
+          className="font-arcade arcade-glow arcade-blink mb-1 text-center text-[0.7rem]"
           style={{ color: kind === 'best' ? '#ffcc4d' : '#ff5a5f' }}
         >
           {kind === 'best' ? 'NOUVEAU RECORD !' : 'MUR DE LA HONTE !'}
@@ -324,7 +321,7 @@ export function FameCorner({ view }: { view: GameView }) {
   } else {
     const top = fame[kind][0];
     content = top ? (
-      <p className={`${arcade.className} text-center text-[0.55rem] leading-relaxed text-ink-faint`}>
+      <p className="font-arcade text-center text-[0.55rem] leading-relaxed text-ink-faint">
         {kind === 'best' ? 'RECORD A BATTRE' : 'PIRE SCORE'} : {top.initials} {top.score}
       </p>
     ) : null;
@@ -378,7 +375,7 @@ export function Attract({ onExit }: { onExit: () => void }) {
       tabIndex={-1}
       aria-label="Revenir au menu"
       onClick={onExit}
-      className={`${arcade.className} scanlines fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center bg-felt-900 px-6`}
+      className={`font-arcade scanlines fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center bg-felt-900 px-6`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

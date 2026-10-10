@@ -32,7 +32,7 @@ function Section({
   return (
     <section className="border-t border-white/10 py-6">
       <h2 className="mb-3 flex flex-wrap items-baseline gap-2.5 text-lg font-bold">
-        <span className="tnum text-xs font-black text-accent">{n}</span>
+        <span className="font-arcade arcade-glow text-[0.6rem] text-accent">{n}</span>
         {title}
         {house && (
           <span className="rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-accent">
@@ -61,7 +61,7 @@ export default function RulesPage() {
         ← Retour
       </Link>
 
-      <h1 className="text-3xl font-black tracking-tight">Les règles</h1>
+      <h1 className="neon-sign neon-on text-3xl font-black tracking-tight">Les règles</h1>
       <p className="mt-2 text-sm text-ink-dim">
         Celles du jeu original, plus trois règles maison — signalées là où elles s’appliquent. But
         du jeu&nbsp;: avoir le plus petit total. Les quatre dernières sections ne valent que pour le{' '}
