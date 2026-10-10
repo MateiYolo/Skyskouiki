@@ -54,3 +54,16 @@ export const actionRequestSchema = z.object({
   playerId: z.string().min(8).max(64),
   action: actionSchema,
 });
+
+/**
+ * Trois caractères, et c'est tout ce qu'on vérifie : sur un flipper, personne
+ * ne modère les initiales. Comptés en caractères, pas en octets — un emoji
+ * vaut une lettre, et il est le bienvenu.
+ */
+export const recordRequestSchema = z.object({
+  playerId: z.string().min(8).max(64),
+  initials: z
+    .string()
+    .transform((v) => Array.from(v.replace(INVISIBLE, '').toUpperCase()).slice(0, 3).join(''))
+    .refine((v) => v.trim().length > 0, 'Champ vide'),
+});

@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
+import { Attract, useIdle } from '@/components/HallOfFame';
 import { PlayingCard } from '@/components/PlayingCard';
 import { MOVE } from '@/lib/client/motion';
 import { CODE_LENGTH, cleanCode } from '@/lib/code';
@@ -31,6 +32,9 @@ function Fan() {
   );
 }
 
+/** Le temps qu'une borne laisse au passant avant de lui faire l'article. */
+const ATTRACT_AFTER_MS = 20_000;
+
 export default function Home() {
   const router = useRouter();
   const { identity, update, ready } = useIdentity();
@@ -40,6 +44,9 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'menu' | 'join'>('menu');
+  // Laissé seul un moment, l'accueil fait comme une borne : il passe en mode
+  // démo et fait défiler les records. Pas pendant une création en cours.
+  const [attract, setAttract] = useIdle(ATTRACT_AFTER_MS, !busy);
 
   const displayName = identity?.name ?? '';
   const displayEmoji = emoji || identity?.emoji || '🦊';
@@ -174,12 +181,17 @@ export default function Home() {
 
         {error && <p className="mt-3 text-center text-sm text-danger">{error}</p>}
 
-        <p className="mt-6 text-center text-xs text-ink-faint">
+        <p className="mt-6 flex justify-center gap-4 text-center text-xs text-ink-faint">
           <Link href="/regles" className="underline underline-offset-4">
             Les règles complètes
           </Link>
+          <button type="button" onClick={() => setAttract(true)} className="underline underline-offset-4">
+            Les records
+          </button>
         </p>
       </div>
+
+      <AnimatePresence>{attract && <Attract onExit={() => setAttract(false)} />}</AnimatePresence>
     </main>
   );
 }

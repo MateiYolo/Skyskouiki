@@ -329,3 +329,43 @@ button,
 .rise {
   animation: rise 0.35s var(--ease-out) both;
 }
+
+/* --------------------------------------------------------------------------
+   Tableau des records : l'écran d'une borne d'arcade
+   -------------------------------------------------------------------------- */
+
+/* Un clignotement de borne : allumé, éteint, sans fondu entre les deux. */
+@keyframes arcade-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.arcade-blink {
+  animation: arcade-blink 0.9s steps(1, end) infinite;
+}
+
+/* Le phosphore qui bave un peu autour des lettres. */
+.arcade-glow {
+  text-shadow:
+    0 0 4px currentColor,
+    0 0 14px color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* Les lignes de balayage d'un vieux tube, par-dessus tout le reste. Le
+   conteneur doit être positionné (`relative`, `fixed`…) : la classe ne le fait
+   pas elle-même, hors couche, elle écraserait un `fixed` de Tailwind. */
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0.22) 0,
+    rgb(0 0 0 / 0.22) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}

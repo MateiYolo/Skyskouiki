@@ -3,6 +3,7 @@
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { Confetti } from './Confetti';
+import { FameCorner } from './HallOfFame';
 import { ScoreMeter } from './PlayerPanel';
 import { GAUGE_DELAY, GAUGE_FILL, GAUGE_STAGGER, MOVE, SETTLE } from '@/lib/client/motion';
 import { gameQuip, roundQuip, type QuipTone } from '@/lib/client/quips';
@@ -78,7 +79,7 @@ function Sheet({ children }: { children: React.ReactNode }) {
       animate={{ opacity: 1 }}
     >
       <motion.div
-        className="safe-bottom w-full max-w-md rounded-t-3xl border border-white/12 bg-felt-800/95 p-5 shadow-2xl sm:rounded-3xl"
+        className="safe-bottom max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-white/12 bg-felt-800/95 p-5 shadow-2xl sm:rounded-3xl"
         initial={{ y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={SETTLE}
@@ -257,6 +258,10 @@ export function GameOverPanel({
             </li>
           ))}
         </ul>
+
+        {/* La borne au fond du bar : chacun y grave son score, la gloire comme
+            la honte, sur son propre téléphone. */}
+        <FameCorner view={view} />
 
         <button
           type="button"
