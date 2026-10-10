@@ -124,7 +124,12 @@ export const OpponentStrip = memo(function OpponentStrip({
         // 375 px de large, le premier adversaire était rogné et inatteignable.
         'justify-center-safe',
         more.left && more.right ? 'fade-both' : more.right ? 'fade-right' : more.left ? 'fade-left' : '',
+        // Sur un écran large, la bande devient une colonne entière : plus rien
+        // ne défile, les panneaux se partagent la hauteur et la largeur.
+        'desk:grid desk:max-h-none desk:min-h-0 desk:auto-rows-[minmax(0,1fr)] desk:gap-4 desk:overflow-visible desk:p-0 desk:pb-4',
       ].join(' ')}
+      // Sans effet tant que la bande est un flex : ne compte que sur écran large.
+      style={{ gridTemplateColumns: `repeat(${deskColumns(opponents.length)}, minmax(0, 1fr))` }}
     >
       {opponents.map((player) => (
         <OpponentPanel
@@ -146,6 +151,18 @@ export const OpponentStrip = memo(function OpponentStrip({
     </div>
   );
 })
+
+/**
+ * Combien de colonnes de panneaux sur un écran large.
+ *
+ * La colonne des adversaires est deux fois plus haute que large : jusqu'à
+ * trois, ils s'empilent et chacun garde toute la largeur. Au-delà, l'empilement
+ * les aplatirait en lamelles — deux colonnes, jamais trois, qui les
+ * étireraient en hauteur avec une grille minuscule au milieu.
+ */
+function deskColumns(count: number): number {
+  return count <= 3 ? 1 : 2;
+}
 
 /** Ce que la grille de ce joueur doit rejouer du dernier coup. */
 function echoFor(playerId: string, echo: MoveEcho | null) {
@@ -266,7 +283,7 @@ function OpponentPanel({
         onClick={onOpen}
         aria-label={label}
         data-player={player.id}
-        className={`${frame} w-full max-w-[26rem] flex-col`}
+        className={`${frame} w-full max-w-[26rem] flex-col desk:max-w-none desk:p-3`}
       >
         <div className="shrink-0">{identity}</div>
         <div className="fit-box min-h-0 flex-1">
@@ -285,7 +302,7 @@ function OpponentPanel({
       aria-label={label}
       aria-current={active ? 'true' : undefined}
       data-player={player.id}
-      className={`${frame} min-w-[7.5rem] max-w-[13rem] flex-1 flex-col`}
+      className={`${frame} min-w-[7.5rem] max-w-[13rem] flex-1 flex-col desk:min-w-0 desk:max-w-none desk:p-2.5`}
     >
       <div className="shrink-0">{identity}</div>
 

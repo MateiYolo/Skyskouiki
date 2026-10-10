@@ -77,7 +77,7 @@ export const MyBoard = memo(function MyBoard({
   const upNext = !closedByMe && nextPlayerId(view) === view.you.id;
 
   return (
-    <div className="safe-bottom board-cap mx-auto flex min-h-0 w-full max-w-[26rem] flex-[5] flex-col px-3 pt-1.5">
+    <div className="safe-bottom board-cap mx-auto flex min-h-0 w-full max-w-[26rem] flex-[5] flex-col px-3 pt-1.5 desk:max-w-none desk:[max-block-size:none] desk:px-0">
       {/* Mon nom sert de repère, mes deux scores sont l'information : le compte
           des dos, lui, se lit sur la grille juste en dessous. */}
       <div className="mb-1.5 flex shrink-0 items-center gap-2">
