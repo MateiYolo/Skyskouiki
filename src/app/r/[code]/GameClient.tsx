@@ -724,6 +724,7 @@ function Lobby({
 
           <VariantPicker
             variant={view.variant}
+            players={view.players.length}
             canChange={canSetVariant}
             onChange={onSetVariant}
           />
