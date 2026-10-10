@@ -53,22 +53,30 @@ export const SPICY_COMPOSITION: ReadonlyArray<readonly [value: number, count: nu
 ];
 
 /**
- * Nombre de cartes Vol glissées dans la pioche en mode spicy.
+ * Nombre de cartes Vol glissées dans la pioche en mode spicy, à deux joueurs.
  *
  * Cinq, parce qu'un Vol ne se déclenche qu'en étant *pioché* (cf.
  * `seedSpecialCards`). Mesuré sur cent cinquante parties par configuration :
- * **un Vol par manche à deux joueurs, un peu plus de deux à quatre** — une
- * manche à quatre dure deux fois plus de coups, donc on pioche deux fois plus.
- * Deux cartes ne sortiraient quasiment jamais, huit feraient de l'échange le
- * jeu principal.
- *
- * Le nombre ne dépend volontairement pas du nombre de joueurs. À six et huit
- * l'échange devient effectivement le jeu principal (plus de quatre Vol par
- * manche à six), et c'est assumé : le mode spicy est une règle maison, et la
- * table qui le choisit à huit cherche exactement ça. Ce qui compte pour le
- * dosage, c'est le jeu à deux et quatre, où il tient.
+ * **un Vol par manche à deux joueurs**. Deux cartes ne sortiraient quasiment
+ * jamais, huit feraient de l'échange le jeu principal.
  */
 export const STEAL_COUNT = 5;
+
+/**
+ * Les Vol en plus dès qu'on est trois.
+ *
+ * À deux, un Vol n'a qu'une cible : c'est un échange, pas un choix. À
+ * plusieurs, il devient une arme — on choisit qui l'on dépouille — et c'est là
+ * qu'il pimente. Deux de plus, donc, à partir de trois joueurs : la table qui
+ * choisit spicy à six cherche exactement ce chaos-là, et le jeu à deux, lui,
+ * garde son dosage mesuré.
+ */
+export const EXTRA_STEALS_MULTI = 2;
+
+/** Les Vol de la pioche pour une table de `players` joueurs. */
+export function stealCount(players: number): number {
+  return players > 2 ? STEAL_COUNT + EXTRA_STEALS_MULTI : STEAL_COUNT;
+}
 
 /**
  * Nombre de cartes Valse glissées dans la pioche en mode spicy.
@@ -203,9 +211,9 @@ export function placeableCells(
 }
 
 /** Les cartes sans valeur que le mode spicy glisse dans la pioche. */
-export function spicySpecials(): SpecialCard[] {
+export function spicySpecials(players: number): SpecialCard[] {
   return [
-    ...Array.from({ length: STEAL_COUNT }, (): SpecialCard => STEAL_CARD),
+    ...Array.from({ length: stealCount(players) }, (): SpecialCard => STEAL_CARD),
     ...Array.from({ length: SWAP_COUNT }, (): SpecialCard => SWAP_CARD),
   ];
 }
@@ -219,7 +227,7 @@ export function spicySpecials(): SpecialCard[] {
  * éliminations. La conséquence est une règle de jeu à part entière, pas un
  * détail d'implémentation — **elles ne se déclenchent que si quelqu'un
  * pioche**, jamais en étant distribuées. C'est ce qui fixe leur fréquence, et
- * donc leur dosage (cf. `STEAL_COUNT`, `SWAP_COUNT`).
+ * donc leur dosage (cf. `stealCount`, `SWAP_COUNT`).
  */
 export function seedSpecialCards(
   pile: readonly ValueCard[],

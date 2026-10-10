@@ -11,9 +11,9 @@ import {
   JOKER_COUNT,
   SPICY_COMPOSITION,
   STEAL_CARD,
-  STEAL_COUNT,
   SWAP_CARD,
   SWAP_COUNT,
+  stealCount,
   type PileCard,
   type Variant,
 } from '@/lib/skyjo';
@@ -29,10 +29,12 @@ import {
  * reconnaître : à la pioche, le magenta et le turquoise arrivent sans légende.
  *
  * Les nombres viennent des constantes du moteur : leur dosage est un réglage
- * d'équilibre (cf. `STEAL_COUNT`), et un salon qui annoncerait cinq Vol là où
- * le paquet en glisse quatre serait pire que pas d'annonce du tout.
+ * d'équilibre (cf. `stealCount`), et un salon qui annoncerait cinq Vol là où
+ * le paquet en glisse sept serait pire que pas d'annonce du tout. D'où la
+ * table en argument : le nombre de Vol suit le nombre de joueurs, et il se
+ * met à jour sous les yeux du salon à mesure que les invités arrivent.
  */
-const EXTRAS: ReadonlyArray<{
+interface Extra {
   card: PileCard;
   count: number;
   name: string;
@@ -41,45 +43,46 @@ const EXTRAS: ReadonlyArray<{
   /** Où elle vit — c'est la moitié de ce qu'il faut comprendre du mode. */
   where: string;
   what: string;
-}> = [
-  {
-    card: SPICY_COMPOSITION[0][0],
-    count: SPICY_COMPOSITION[0][1],
-    name: '-5',
-    // Le bleu clair du 0 plutôt que le marine de la carte : sur ce fond, un
-    // marine ne se lit pas.
-    ink: 'text-card-sky',
-    where: 'dans les grilles',
-    what: 'La plus basse du jeu : dix-sept points sous un 12. Sinon, une carte comme les autres.',
-  },
-  {
-    card: JOKER_CARD,
-    count: JOKER_COUNT,
-    name: 'Joker',
-    ink: 'text-joker',
-    where: 'dans les grilles',
-    what: 'Vaut 0 et complète n’importe quel groupe : 7 / joker / 7 saute comme trois 7.',
-  },
-  {
-    card: STEAL_CARD,
-    count: STEAL_COUNT,
-    name: 'Vol',
-    ink: 'text-steal',
-    where: 'à la pioche',
-    what: 'Tu échanges une de tes cartes contre celle d’un adversaire — visible ou cachée.',
-  },
-  {
-    card: SWAP_CARD,
-    count: SWAP_COUNT,
-    name: 'Valse',
-    ink: 'text-swap',
-    where: 'à la pioche',
-    what: 'Deux de tes cartes échangent leur place : de quoi enfin aligner ta colonne.',
-  },
-];
+}
 
-/** Ce que le mode ajoute au paquet officiel, tout compris. */
-const EXTRA_TOTAL = EXTRAS.reduce((n, extra) => n + extra.count, 0);
+function extrasFor(players: number): Extra[] {
+  return [
+    {
+      card: SPICY_COMPOSITION[0][0],
+      count: SPICY_COMPOSITION[0][1],
+      name: '-5',
+      // Le bleu clair du 0 plutôt que le marine de la carte : sur ce fond, un
+      // marine ne se lit pas.
+      ink: 'text-card-sky',
+      where: 'dans les grilles',
+      what: 'La plus basse du jeu : dix-sept points sous un 12. Sinon, une carte comme les autres.',
+    },
+    {
+      card: JOKER_CARD,
+      count: JOKER_COUNT,
+      name: 'Joker',
+      ink: 'text-joker',
+      where: 'dans les grilles',
+      what: 'Vaut 0 et complète n’importe quel groupe : 7 / joker / 7 saute comme trois 7.',
+    },
+    {
+      card: STEAL_CARD,
+      count: stealCount(players),
+      name: 'Vol',
+      ink: 'text-steal',
+      where: 'à la pioche',
+      what: 'Tu échanges une de tes cartes contre celle d’un adversaire — visible ou cachée.',
+    },
+    {
+      card: SWAP_CARD,
+      count: SWAP_COUNT,
+      name: 'Valse',
+      ink: 'text-swap',
+      where: 'à la pioche',
+      what: 'Deux de tes cartes échangent leur place : de quoi enfin aligner ta colonne.',
+    },
+  ];
+}
 
 /**
  * Le choix du mode, dans le salon.
@@ -92,15 +95,21 @@ const EXTRA_TOTAL = EXTRAS.reduce((n, extra) => n + extra.count, 0);
  */
 export function VariantPicker({
   variant,
+  players,
   canChange,
   onChange,
 }: {
   variant: Variant;
+  /** Les joueurs déjà assis : le nombre de Vol en dépend. */
+  players: number;
   /** Seul l'hôte choisit : les autres lisent le mode sans pouvoir en changer. */
   canChange: boolean;
   onChange: (variant: Variant) => void;
 }) {
   const spicy = variant === 'spicy';
+  const extras = extrasFor(players);
+  /** Ce que le mode ajoute au paquet officiel, tout compris. */
+  const extraTotal = extras.reduce((n, extra) => n + extra.count, 0);
 
   return (
     <div className="w-full max-w-xs">
@@ -160,11 +169,11 @@ export function VariantPicker({
           >
             <div className="mt-2 rounded-2xl border border-steal/30 bg-steal/[0.07] p-2.5">
               <p className="mb-2 text-center text-[0.62rem] uppercase tracking-[0.16em] text-steal">
-                +{EXTRA_TOTAL} cartes dans le paquet
+                +{extraTotal} cartes dans le paquet
               </p>
 
               <ul className="space-y-1.5">
-                {EXTRAS.map((extra, i) => (
+                {extras.map((extra, i) => (
                   <motion.li
                     key={extra.name}
                     // En cascade, de haut en bas : quatre lignes qui arrivent
@@ -209,7 +218,7 @@ export function VariantPicker({
             className="mt-1.5 text-center text-[0.68rem] leading-snug text-ink-dim"
           >
             Le paquet officiel, rien de plus : {DECK_SIZE} cartes, de -2 à 12.
-            <span className="block text-ink-faint">Spicy en ajoute {EXTRA_TOTAL}.</span>
+            <span className="block text-ink-faint">Spicy en ajoute {extraTotal}.</span>
           </motion.p>
         )}
       </AnimatePresence>

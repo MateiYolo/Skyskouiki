@@ -7,6 +7,7 @@ import {
   SPICY_COMPOSITION,
   SPICY_DECK_SIZE,
   STEAL_COUNT,
+  stealCount,
   SWAP_COUNT,
   buildDeck,
   cardToCell,
@@ -777,7 +778,7 @@ describe('composition du mode spicy', () => {
 
   it('ne met les Vol et les Valse que dans la pioche, jamais en grille ni à la défausse', () => {
     const s = play(spicyLobby(4), { type: 'startGame', playerId: 'p0' });
-    expect(countCard(s.drawPile, STEAL_CARD)).toBe(STEAL_COUNT);
+    expect(countCard(s.drawPile, STEAL_CARD)).toBe(stealCount(4));
     expect(countCard(s.drawPile, SWAP_CARD)).toBe(SWAP_COUNT);
     expect(countCard(s.discardPile, STEAL_CARD)).toBe(0);
     expect(countCard(s.discardPile, SWAP_CARD)).toBe(0);
@@ -785,8 +786,17 @@ describe('composition du mode spicy', () => {
     for (const p of s.players) expect(p.grid.every((c) => c !== null)).toBe(true);
     // Toutes les autres cartes sont là, spéciales comprises : rien ne s'est perdu.
     expect(s.drawPile.length + s.discardPile.length + 12 * 4).toBe(
-      SPICY_DECK_SIZE + STEAL_COUNT + SWAP_COUNT,
+      SPICY_DECK_SIZE + stealCount(4) + SWAP_COUNT,
     );
+  });
+
+  it('glisse deux Vol de plus dès qu’on est trois', () => {
+    const duo = play(spicyLobby(2), { type: 'startGame', playerId: 'p0' });
+    expect(countCard(duo.drawPile, STEAL_CARD)).toBe(STEAL_COUNT);
+    for (const n of [3, 4, 8]) {
+      const s = play(spicyLobby(n), { type: 'startGame', playerId: 'p0' });
+      expect(countCard(s.drawPile, STEAL_CARD)).toBe(STEAL_COUNT + 2);
+    }
   });
 
   it('garde les deux -5 comme des points secs — jamais une colonne', () => {

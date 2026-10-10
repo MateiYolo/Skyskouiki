@@ -265,9 +265,11 @@ export default function RulesPage() {
 
       <Section n="14" title="La carte Vol" spicy>
         <p>
-          <Key>Cinq cartes Vol</Key> sont glissées dans la pioche — et seulement là. Elles ne
-          peuvent donc pas dormir dans une grille&nbsp;: un Vol ne se déclenche que si{' '}
-          <Key>quelqu’un pioche</Key>. Compte environ un par manche.
+          <Key>Cinq cartes Vol</Key> sont glissées dans la pioche à deux joueurs,{' '}
+          <Key>sept</Key> dès qu’on est trois — et seulement dans la pioche. Elles ne peuvent
+          donc pas dormir dans une grille&nbsp;: un Vol ne se déclenche que si{' '}
+          <Key>quelqu’un pioche</Key>. Compte environ un par manche à deux, bien plus à
+          plusieurs.
         </p>
         <p>
           Quand tu en pioches une, tu ne la prends pas en main&nbsp;: tu <Key>échanges une de tes

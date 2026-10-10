@@ -483,7 +483,7 @@ function dealRound(s: GameState, events: GameEvent[]) {
   // Les Vol et les Valse n'entrent en jeu qu'ici, les grilles déjà servies :
   // c'est ce qui garantit qu'ils ne peuvent être que dans la pioche.
   if (variant === 'spicy') {
-    const seeded = seedSpecialCards(deck, spicySpecials(), s.seed);
+    const seeded = seedSpecialCards(deck, spicySpecials(s.players.length), s.seed);
     s.drawPile = seeded.pile;
     s.seed = seeded.seed;
   } else {
