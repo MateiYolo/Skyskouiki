@@ -428,7 +428,12 @@ export function GameClient({ code }: { code: string }) {
           busy={busy}
         />
       ) : (
-        <>
+        // Sur téléphone, ce calque n'existe pas (`contents`) : les trois
+        // étages restent les enfants directs de la colonne. Sur un écran
+        // large, il les couche côte à côte — adversaires, piles, moi. Ma
+        // colonne prend la largeur que la hauteur permet à ma grille, pas
+        // plus : le reste revient aux adversaires.
+        <div className="contents desk:grid desk:min-h-0 desk:flex-1 desk:grid-cols-[minmax(0,1fr)_auto_minmax(0,min(100dvh_-_7.5rem,55%))] desk:gap-8 desk:px-8">
           <OpponentStrip
             view={view}
             opponents={opponents}
@@ -481,7 +486,7 @@ export function GameClient({ code }: { code: string }) {
               revealing={revealing}
             />
           )}
-        </>
+        </div>
       )}
 
       {/* Mon tour : un liseré sur tout le pourtour. Il ne masque rien et ne se

@@ -41,6 +41,22 @@
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
 }
 
+/* Un écran large et couché : un ordinateur, une tablette à l'horizontale. La
+   table empilée du téléphone n'y occupait qu'une bande étroite au milieu, et
+   bridée en rem, elle ne grandissait pas avec l'écran — sur un 27 pouces, ma
+   grille faisait la taille d'une carte de visite. Là, la table se couche :
+   adversaires à gauche, piles au milieu, ma grille à droite. */
+@custom-variant desk (@media (min-width: 1024px) and (min-aspect-ratio: 5/4));
+
+/* Et tout ce qui se compte en rem — textes, piles, tuiles de score — suit la
+   hauteur de l'écran au lieu de rester à la taille d'un téléphone. Plancher à
+   la taille par défaut : un portable de 768 px de haut ne rapetisse pas. */
+@media (min-width: 1024px) and (min-aspect-ratio: 5/4) {
+  html {
+    font-size: clamp(100%, 1.5vh, 150%);
+  }
+}
+
 :root {
   --font-numeric-stack: var(--font-outfit), ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
   color-scheme: dark;

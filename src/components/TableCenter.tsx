@@ -175,23 +175,23 @@ export const TableCenter = memo(function TableCenter({
   return (
     // Un bandeau bordé sur ses deux faces : le terrain commun se voit, et on
     // sait de part et d'autre à qui appartient chaque moitié de l'écran.
-    <div className="shrink-0 border-y border-white/8 bg-white/[0.03] px-4 py-1">
+    <div className="shrink-0 border-y border-white/8 bg-white/[0.03] px-4 py-1 desk:w-[19rem] desk:self-center desk:rounded-3xl desk:border desk:px-4 desk:py-6">
       {/* Consigne : deux lignes réservées, pour que rien ne saute d'un tour à
           l'autre. Le rouge du dernier tour passe devant l'ambre de « c'est à
           toi » — quand les deux sont vrais, c'est le premier qui décide du coup
           à jouer. */}
-      <div className="mb-1.5 flex h-[2.1rem] flex-col justify-center text-center">
+      <div className="mb-1.5 flex h-[2.1rem] flex-col justify-center text-center desk:mb-5 desk:h-[3.2rem]">
         <motion.div
           key={title}
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`truncate text-[0.9rem] font-bold leading-tight ${
+          className={`truncate text-[0.9rem] font-bold leading-tight desk:text-[1.2rem] ${
             finalTurn ? 'text-danger' : emphasis ? 'text-accent' : 'text-ink-dim'
           }`}
         >
           {title}
         </motion.div>
-        <div className="truncate text-[0.68rem] leading-tight text-ink-faint">
+        <div className="truncate text-[0.68rem] leading-tight text-ink-faint desk:mt-1 desk:text-[0.8rem]">
           {heldNote ?? hint}
         </div>
       </div>
@@ -199,7 +199,7 @@ export const TableCenter = memo(function TableCenter({
       <div className="flex items-end justify-center gap-4">
         {/* Pioche. Le nombre de cartes restantes n'y figure pas : il ne change
             aucune décision — la pioche se reconstitue quand elle s'épuise. */}
-        <div className="flex w-[3.1rem] flex-col items-center gap-1" data-testid="draw-pile">
+        <div className="flex w-[3.1rem] flex-col items-center gap-1 desk:w-[4.6rem]" data-testid="draw-pile">
           {/* Une pile hors d'atteinte s'efface : on ne la confond pas avec un bouton. */}
           <div
             data-anchor={DRAW_PILE}
@@ -227,7 +227,7 @@ export const TableCenter = memo(function TableCenter({
             l'adversaire, vers le bas quand elle est à moi — et porte son nom.
             Posée à plat au milieu, elle n'appartenait visiblement à personne. */}
         <motion.div
-          className="flex w-[3.7rem] flex-col items-center gap-1"
+          className="flex w-[3.7rem] flex-col items-center gap-1 desk:w-[5.6rem]"
           animate={{ y: holder ? (holder.isMe ? 4 : -6) : 0 }}
           transition={MOVE}
         >
@@ -309,7 +309,7 @@ export const TableCenter = memo(function TableCenter({
         </motion.div>
 
         {/* Défausse */}
-        <div className="flex w-[3.1rem] flex-col items-center gap-1" data-testid="discard-pile">
+        <div className="flex w-[3.1rem] flex-col items-center gap-1 desk:w-[4.6rem]" data-testid="discard-pile">
           <div
             data-anchor={DISCARD_PILE}
             className={`relative w-full ${
