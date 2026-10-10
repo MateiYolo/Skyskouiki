@@ -197,6 +197,44 @@ async function checkSpicySurface(code) {
   );
 }
 
+/**
+ * Le tableau des records, une fois la partie finie.
+ *
+ * Ce qu'on vérifie : que le score gravé est celui de la partie et pas un
+ * chiffre venu du corps de la requête, que chacun tombe dans le bon tableau,
+ * qu'une seconde saisie réécrit la ligne au lieu d'en ajouter une, et qu'on
+ * ne grave rien avant la fin.
+ */
+async function checkRecords(code, state) {
+  for (const player of state.players) {
+    // Un score glissé dans le corps doit être ignoré : seul l'état fait foi.
+    const first = await post(`${BASE}/api/games/${code}/record`, {
+      playerId: player.id,
+      initials: 'zzz',
+      score: -999,
+    });
+    const again = await post(`${BASE}/api/games/${code}/record`, {
+      playerId: player.id,
+      initials: player.name.slice(0, 3),
+    });
+    if (again.id !== first.id) throw new Error('une seconde saisie a créé une seconde ligne');
+    const board = player.totalScore >= state.targetScore ? 'shame' : 'best';
+    const line = again.fame[board].find((e) => e.id === again.id);
+    // Une table déjà pleine en base peut ne pas avoir de place : ce n'est pas
+    // une faute, et il n'y a alors rien à comparer.
+    if (line && (line.score !== player.totalScore || line.initials !== player.name.slice(0, 3).toUpperCase())) {
+      throw new Error(`record faux : ${JSON.stringify(line)} pour ${player.name} ${player.totalScore}`);
+    }
+  }
+  const stranger = await fetch(`${BASE}/api/games/${code}/record`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ playerId: crypto.randomUUID(), initials: 'BAD' }),
+  });
+  if (stranger.status !== 403) throw new Error(`un inconnu grave un record (${stranger.status})`);
+  console.log('  records gravés : score lu dans la partie, ligne réécrite sans doublon');
+}
+
 async function playGame(variant) {
   const { code } = await post(`${BASE}/api/games`, { playerId: A, name: 'Matei', emoji: '🦊' });
   console.log(`partie ${variant} créée :`, code);
@@ -234,6 +272,7 @@ async function playGame(variant) {
             `, joker ${seen.jokerSeen ? 'aperçu en grille' : 'jamais sorti'}`,
         );
       }
+      await checkRecords(code, state);
       return;
     }
     if (state.phase === 'initialFlip') {

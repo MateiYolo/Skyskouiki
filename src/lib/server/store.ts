@@ -558,3 +558,39 @@ export async function performAction(
   }
   throw new GameError('La partie bouge trop vite, réessaie.', 503);
 }
+
+/** Ce qu'une partie terminée inscrit au tableau des records pour un joueur. */
+export interface FinalStanding {
+  gameId: string;
+  playerId: string;
+  score: number;
+  busted: boolean;
+  rounds: number;
+  players: number;
+  spicy: boolean;
+}
+
+/**
+ * Le score de fin de partie d'un joueur, lu dans l'état et nulle part ailleurs.
+ *
+ * C'est tout ce qui protège le tableau des records : les initiales viennent du
+ * joueur, le score jamais. Lu en base plutôt que dans le cache, parce qu'une
+ * instance peut ne pas avoir vu le dernier coup — et une partie « pas encore
+ * terminée » serait alors un refus injuste.
+ */
+export async function finalStanding(code: string, playerId: string): Promise<FinalStanding> {
+  const state = await db().load(code);
+  if (!state) throw new GameError('Cette partie n’existe pas (ou plus).', 404);
+  if (state.phase !== 'gameOver') throw new GameError('La partie n’est pas terminée.', 409);
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) throw new GameError('Tu n’as pas joué cette partie.', 403);
+  return {
+    gameId: state.id,
+    playerId,
+    score: player.totalScore,
+    busted: player.totalScore >= state.targetScore,
+    rounds: state.round,
+    players: state.players.length,
+    spicy: (state.variant ?? 'classic') === 'spicy',
+  };
+}

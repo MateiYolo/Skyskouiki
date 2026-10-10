@@ -21,7 +21,9 @@ export type Cue =
   | 'yourTurn'
   | 'lastTurn'
   | 'win'
-  | 'lose';
+  | 'lose'
+  | 'blip'
+  | 'record';
 
 // Nom d'avant le renommage : la garder, c'est garder le réglage de chacun.
 const MUTE_KEY = 'skyskouiki.muted.v1';
@@ -121,6 +123,8 @@ const HAPTICS: Record<Cue, number | number[]> = {
   lastTurn: [0, 24, 60, 24, 60, 24],
   win: [0, 40, 60, 40, 60, 120],
   lose: [0, 90],
+  blip: 6,
+  record: [0, 20, 40, 20, 40, 20, 40, 80],
 };
 
 /**
@@ -197,6 +201,17 @@ export function cue(kind: Cue, delay = 0) {
       break;
     case 'lose':
       [392, 349.23, 293.66].forEach((f, i) => note(f, t + i * 0.13, 0.34, 0.1, 'sine'));
+      break;
+    // Le tableau des records parle la langue des bornes : des carrés, pas des
+    // triangles. Un bip sec par lettre qui défile…
+    case 'blip':
+      note(980, t, 0.04, 0.05, 'square');
+      break;
+    // … et la fanfare huit bits quand les initiales sont gravées.
+    case 'record':
+      [523.25, 783.99, 659.25, 1046.5, 783.99, 1318.5].forEach((f, i) =>
+        note(f, t + i * 0.075, 0.12, 0.06, 'square'),
+      );
       break;
   }
 }

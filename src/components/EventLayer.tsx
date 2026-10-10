@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
+import { arcadeText } from '@/lib/client/arcade';
 import { cue } from '@/lib/client/feedback';
 import { nudgeTurn } from '@/lib/client/nudge';
 import { clearDelay } from '@/lib/client/flights';
@@ -41,9 +42,9 @@ interface Hero {
 }
 
 const HERO_EDGE: Record<Hero['tone'], string> = {
-  good: 'rgb(74 222 128 / 0.45)',
-  warn: 'rgb(255 204 77 / 0.45)',
-  alert: 'rgb(255 90 95 / 0.7)',
+  good: 'rgb(74 222 128 / 0.75)',
+  warn: 'rgb(255 204 77 / 0.75)',
+  alert: 'rgb(255 90 95 / 0.9)',
 };
 
 const HERO_INK: Record<Hero['tone'], string> = {
@@ -382,25 +383,27 @@ export function EventLayer({ view }: { view: GameView }) {
             // recomposition de toute la table sous l'annonce, à chaque image,
             // pendant qu'un coup s'anime. Quatre points d'opacité de plus
             // donnent le même résultat pour rien.
-            className="max-w-[17rem] rounded-2xl border px-4 py-2 text-center"
+            // Un tube de néon autour, dans la couleur de l'annonce : le cadre
+            // prend `currentColor`, le texte du dessous repasse en sourdine.
+            className="neon-frame max-w-[18rem] rounded-2xl px-4 py-2.5 text-center"
             style={{
-              borderColor: HERO_EDGE[hero.tone],
+              color: HERO_EDGE[hero.tone],
               background: 'rgb(11 7 22 / 0.94)',
-              boxShadow: hero.tone === 'alert' ? '0 0 24px rgb(255 90 95 / 0.28)' : undefined,
             }}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={SETTLE}
           >
+            {/* Le titre en police de borne : c'est la machine qui annonce. */}
             <div
-              className="text-[1.05rem] font-black leading-tight tracking-tight"
+              className="font-arcade arcade-glow text-[0.78rem] leading-snug"
               style={{ color: HERO_INK[hero.tone] }}
             >
-              {hero.title}
+              {arcadeText(hero.title)}
             </div>
             {hero.subtitle && (
-              <div className="mt-0.5 text-[0.78rem] font-medium leading-tight text-ink-dim">
+              <div className="mt-1 text-[0.78rem] font-medium leading-tight text-ink-dim">
                 {hero.subtitle}
               </div>
             )}

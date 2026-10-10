@@ -3,9 +3,11 @@
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { Confetti } from './Confetti';
+import { FameCorner } from './HallOfFame';
 import { ScoreMeter } from './PlayerPanel';
 import { GAUGE_DELAY, GAUGE_FILL, GAUGE_STAGGER, MOVE, SETTLE } from '@/lib/client/motion';
 import { gameQuip, roundQuip, type QuipTone } from '@/lib/client/quips';
+import { rankLabel } from '@/lib/records';
 import type { GameView, RoundScore } from '@/lib/skyjo';
 
 /**
@@ -78,7 +80,7 @@ function Sheet({ children }: { children: React.ReactNode }) {
       animate={{ opacity: 1 }}
     >
       <motion.div
-        className="safe-bottom w-full max-w-md rounded-t-3xl border border-white/12 bg-felt-800/95 p-5 shadow-2xl sm:rounded-3xl"
+        className="safe-bottom max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-white/12 bg-felt-800/95 p-5 shadow-2xl sm:rounded-3xl"
         initial={{ y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={SETTLE}
@@ -148,15 +150,20 @@ function ScoreRows({ view, scores }: { view: GameView; scores: RoundScore[] }) {
                     ×2
                   </motion.span>
                 )}
+                {/* Les chiffres d'un compteur de flipper : c'est le seul endroit
+                    de la feuille où le score se raconte, autant qu'il brille. */}
                 <span
-                  className={`tnum text-lg font-bold ${score.doubled ? 'text-danger' : 'text-ink'}`}
+                  className={`font-arcade arcade-glow text-sm ${score.doubled ? 'text-danger' : 'text-ink'}`}
                 >
                   {score.final > 0 ? '+' : ''}
                   {score.final}
                 </span>
               </div>
-              <div className="tnum text-[0.7rem] text-ink-dim">
-                total <CountUp to={player.totalScore} from={before} delay={lift} />
+              <div className="mt-1 text-[0.7rem] text-ink-dim">
+                total{' '}
+                <span className="font-arcade text-[0.6rem] text-accent">
+                  <CountUp to={player.totalScore} from={before} delay={lift} />
+                </span>
               </div>
             </div>
           </motion.li>
@@ -182,8 +189,8 @@ export function RoundSummary({
 
   return (
     <Sheet>
-      <h2 className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-ink-faint">
-        Manche {view.round} terminée
+      <h2 className="font-arcade arcade-glow text-center text-[0.6rem] text-swap">
+        MANCHE {view.round} TERMINEE
       </h2>
       <p className={`mb-4 mt-1 text-center text-lg font-bold leading-snug ${QUIP_INK[quip.tone]}`}>
         {quip.line}
@@ -224,6 +231,11 @@ export function GameOverPanel({
       {iWon && <Confetti />}
       <Sheet>
         <div className="mb-4 text-center">
+          {/* Deux mots que tout le monde connaît, et qui n'ont jamais eu
+              besoin de traduction. */}
+          <p className="font-arcade neon-sign neon-on mb-3 text-base [--neon:var(--color-steal)]">
+            GAME OVER
+          </p>
           <motion.div
             className="text-5xl"
             initial={{ opacity: 0, scale: 0.9 }}
@@ -248,15 +260,21 @@ export function GameOverPanel({
                 rank === 0 ? 'border-accent/50 bg-accent/10' : 'border-white/10 bg-white/[0.04]',
               ].join(' ')}
             >
-              <span className="tnum w-5 text-sm font-bold text-ink-faint">{rank + 1}</span>
+              <span className="font-arcade w-8 text-[0.5rem] text-ink-faint">{rankLabel(rank)}</span>
               <span className="text-lg" aria-hidden>
                 {player.emoji}
               </span>
               <span className="flex-1 truncate text-sm font-semibold">{player.name}</span>
-              <span className="tnum text-lg font-bold">{player.totalScore}</span>
+              <span className={`font-arcade arcade-glow text-sm ${rank === 0 ? 'text-accent' : 'text-ink'}`}>
+                {player.totalScore}
+              </span>
             </li>
           ))}
         </ul>
+
+        {/* La borne au fond du bar : chacun y grave son score, la gloire comme
+            la honte, sur son propre téléphone. */}
+        <FameCorner view={view} />
 
         <button
           type="button"

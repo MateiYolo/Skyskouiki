@@ -43,6 +43,27 @@ plus cher : une case de grille cesse d'être un nombre. Elle reste pourtant
 seules les éliminations regardent le drapeau, parce que ce sont elles que le
 joker change.
 
+## Le tableau des records
+
+Comme sur les flippers : trois lettres et un score, sans compte ni modération.
+Au Skyjo le meilleur score est le plus bas, alors la borne a deux écrans — les
+**meilleurs scores** (les totaux les plus bas parmi ceux qui n'ont pas franchi
+la barre) et le **mur de la honte** (les plus hauts parmi ceux qui l'ont
+franchie). La barre partage proprement les deux : chacun n'a droit qu'à un
+tableau, et chaque partie en nourrit au moins un.
+
+Il se montre à deux moments. **En fin de partie**, sur chaque téléphone : si ton
+total entre dans les dix, la borne te demande tes initiales aux molettes ▲ ▼
+(on peut tenir le bouton), puis fait clignoter ta ligne. **Sur l'accueil**,
+laissé vingt secondes sans qu'on y touche : il passe en mode démo, comme une
+borne au fond d'un bar, et fait défiler titre, records et honte jusqu'à ce
+qu'on le touche. Le lien « Les records » y mène tout de suite.
+
+La seule vérification qui vaille est côté serveur : le score n'est jamais lu
+dans la requête, mais dans l'état de la partie terminée. Le reste, on s'en
+fiche. Les records vivent dans `skyjo.records`, à part des parties, et
+survivent à leur purge.
+
 ## Comment ça marche
 
 ```
